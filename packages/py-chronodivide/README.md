@@ -120,6 +120,8 @@ node .\packages\py-chronodivide\resim.mjs `
   --max-tick 600 `
   --sample-ticks 600 `
   --sample-mode global `
+  --compact true `
+  --stream-output true `
   --include-super-weapons true `
   --include-terrain-objects true `
   --include-neutral-units true `
@@ -132,6 +134,13 @@ node .\packages\py-chronodivide\resim.mjs `
 ```
 
 These richer fields are opt-in because they can make snapshot files much larger.
+
+For large recordings, `resim.mjs` now supports:
+
+- `--compact true`
+  Write compact JSON instead of pretty-printed JSON.
+- `--stream-output true`
+  Stream the recording to disk incrementally instead of building one giant in-memory JSON string first. This currently requires `--output` and always writes compact JSON.
 
 When enabled, the replay JSON root also includes:
 
@@ -298,6 +307,11 @@ Heavy recording flags on `resim.mjs`:
 - `--include-player-stats`
 - `--include-static-data`
 - `--include-static-map`
+
+Output-size / memory-control flags on `resim.mjs`:
+
+- `--compact`
+- `--stream-output`
 
 ## What Is Still Missing
 

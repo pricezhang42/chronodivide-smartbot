@@ -1,0 +1,36 @@
+{
+  "createdAt": "2026-03-17T16:40:44.594469+00:00",
+  "config": {
+    "replay_dir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50",
+    "output_dir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\timing_success_20260317_113842",
+    "data_dir": "D:\\workspace\\ra2-headless-mix",
+    "py_chronodivide_script": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\py-chronodivide\\extract_sl_tensors.mjs",
+    "replay_glob": "00758dde-b725-4442-ae8f-a657069251a0.rpl",
+    "replay_start": 0,
+    "max_replays": 1,
+    "player": "all",
+    "include_no_action": false,
+    "include_ui_actions": false,
+    "max_actions": null,
+    "max_tick": null,
+    "max_entities": 128,
+    "max_selected_units": 64,
+    "spatial_size": 32,
+    "minimap_size": 64,
+    "overwrite": false,
+    "fail_fast": false
+  },
+  "replayCount": 1,
+  "savedShardCount": 0,
+  "skippedShardCount": 0,
+  "emptyReplayCount": 0,
+  "errorCount": 1,
+  "results": [],
+  "errors": [
+    {
+      "replay": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl",
+      "errorType": "RuntimeError",
+      "error": "py-chronodivide extraction failed for 00758dde-b725-4442-ae8f-a657069251a0.rpl\ncommand: node D:\\workspace\\supalosa-chronodivide-bot\\packages\\py-chronodivide\\extract_sl_tensors.mjs --replay D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl --data-dir D:\\workspace\\ra2-headless-mix --max-entities 128 --max-selected-units 64 --spatial-size 32 --minimap-size 64 --include-flat true --output C:\\Users\\wasdp\\AppData\\Local\\Temp\\chronodivide_sl_vizmh9dz\\dataset.json --player all\nstdout tail: \nstderr tail: RangeError: Invalid string length\n    at JSON.stringify (<anonymous>)\n    at main (file:///D:/workspace/supalosa-chronodivide-bot/packages/py-chronodivide/extract_sl_tensors.mjs:67:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n"
+    }
+  ]
+}

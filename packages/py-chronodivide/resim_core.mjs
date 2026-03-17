@@ -148,6 +148,43 @@ export function stepReplayTick(context) {
   return true;
 }
 
+export function resolveReplayPlayerName(context, playerName = null) {
+  return playerName ?? context.replay.gameOpts.humanPlayers[0]?.name ?? null;
+}
+
+export function buildReplayMetadata(context) {
+  return {
+    path: context.replayPath,
+    gameId: context.replay.gameId,
+    mapName: context.replay.gameOpts.mapName,
+    endTick: context.replay.endTick,
+    players: context.replay.gameOpts.humanPlayers.map((player) => ({
+      name: player.name,
+      countryId: player.countryId,
+      colorId: player.colorId,
+      startPos: player.startPos,
+      teamId: player.teamId,
+    })),
+  };
+}
+
+export function buildReplayResultBase(
+  context,
+  {
+    playerName = null,
+    sampleMode = "global",
+    staticData = undefined,
+  } = {},
+) {
+  return {
+    replay: buildReplayMetadata(context),
+    dataDir: context.dataDir,
+    sampledPlayer: resolveReplayPlayerName(context, playerName),
+    sampleMode,
+    staticData,
+  };
+}
+
 export function collectReplaySamples(
   context,
   {
@@ -165,11 +202,14 @@ export function collectReplaySamples(
     includeTileResources = false,
     includePlayerProduction = false,
     includePlayerStats = false,
+    collectSamples = true,
+    onSample = null,
   } = {},
 ) {
   const resolvedMaxTick = Math.min(maxTick ?? context.replay.endTick, context.replay.endTick);
   const sampleTickSet = new Set(sampleTicks);
-  const samples = [];
+  const samples = collectSamples ? [] : undefined;
+  let sampleCount = 0;
 
   while (context.gameApi.getCurrentTick() < resolvedMaxTick) {
     const progressed = stepReplayTick(context);
@@ -184,39 +224,48 @@ export function collectReplaySamples(
       currentTick === resolvedMaxTick;
 
     if (shouldSample) {
-      if (sampleMode === "observation") {
-        samples.push(
-          collectPlayerObservationSnapshot(context.gameApi, {
-            playerName,
-            unitLimit,
-            internalGame: context.internalGame,
-            includeVisibleTiles,
-            includeVisibleResourceTiles,
-            includeSuperWeapons,
-            includeProduction: includePlayerProduction,
-            includePlayerStats,
-          }),
-        );
-      } else {
-        samples.push(
-          collectGameSnapshot(context.gameApi, {
-            playerName,
-            unitLimit,
-            internalGame: context.internalGame,
-            includeVisibleTiles,
-            includeSuperWeapons,
-            includeTerrainObjects,
-            includeNeutralUnits,
-            includeTileResources,
-            includePlayerProduction,
-            includePlayerStats,
-          }),
-        );
+      const sample =
+        sampleMode === "observation"
+          ? collectPlayerObservationSnapshot(context.gameApi, {
+              playerName,
+              unitLimit,
+              internalGame: context.internalGame,
+              includeVisibleTiles,
+              includeVisibleResourceTiles,
+              includeSuperWeapons,
+              includeProduction: includePlayerProduction,
+              includePlayerStats,
+            })
+          : collectGameSnapshot(context.gameApi, {
+              playerName,
+              unitLimit,
+              internalGame: context.internalGame,
+              includeVisibleTiles,
+              includeSuperWeapons,
+              includeTerrainObjects,
+              includeNeutralUnits,
+              includeTileResources,
+              includePlayerProduction,
+              includePlayerStats,
+            });
+
+      if (samples) {
+        samples.push(sample);
       }
+      if (typeof onSample === "function") {
+        onSample(sample, {
+          tick: currentTick,
+          sampleIndex: sampleCount,
+        });
+      }
+      sampleCount += 1;
     }
   }
 
-  return samples;
+  return {
+    samples: samples ?? [],
+    sampleCount,
+  };
 }
 
 export async function resimulateReplay({
@@ -244,11 +293,11 @@ export async function resimulateReplay({
     replayPath,
   });
 
-  const resolvedPlayerName = playerName ?? context.replay.gameOpts.humanPlayers[0]?.name ?? null;
+  const resolvedPlayerName = resolveReplayPlayerName(context, playerName);
   const staticData = includeStaticData
     ? collectStaticGameData(context.gameApi, { includeMapDump: includeStaticMap })
     : undefined;
-  const samples = collectReplaySamples(context, {
+  const { samples } = collectReplaySamples(context, {
     playerName: resolvedPlayerName,
     maxTick,
     sampleEvery,
@@ -271,26 +320,14 @@ export async function resimulateReplay({
   const stoppedTick = context.gameApi.getCurrentTick();
 
   return {
-    replay: {
-      path: context.replayPath,
-      gameId: context.replay.gameId,
-      mapName: context.replay.gameOpts.mapName,
-      endTick: context.replay.endTick,
-      players: context.replay.gameOpts.humanPlayers.map((player) => ({
-        name: player.name,
-        countryId: player.countryId,
-        colorId: player.colorId,
-        startPos: player.startPos,
-        teamId: player.teamId,
-      })),
-    },
-    dataDir: context.dataDir,
-    sampledPlayer: resolvedPlayerName,
-    sampleMode,
+    ...buildReplayResultBase(context, {
+      playerName: resolvedPlayerName,
+      sampleMode,
+      staticData,
+    }),
     stoppedTick,
     playbackReachedEnd: stoppedTick >= context.replay.endTick,
     playerStatsAtStop,
-    staticData,
     samples,
   };
 }

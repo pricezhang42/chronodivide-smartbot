@@ -12,12 +12,15 @@ Current behavior:
 - iterate replay files
 - call `py-chronodivide/extract_sl_tensors.mjs` with flat tensors enabled
 - group samples by player perspective
+- apply mAS-style action filtering/downsampling on the action-aligned sample stream
 - save replay-player `.pt` shards as `(features, labels)`
+- save replay-player `.sections.pt` sidecars with structured feature/label tensors
 - save sidecar metadata and a run manifest
 
 Notes:
 - feature tensors are stored as `float32`
 - label tensors are stored as `int64`
+- structured section tensors preserve the schema dtypes from `py-chronodivide`
 - per-replay vocabularies still come from `py-chronodivide`, so schema metadata
   is saved per shard instead of globally
 """
@@ -25,7 +28,9 @@ Notes:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import re
 import subprocess
@@ -73,6 +78,25 @@ def label_dtype() -> torch.dtype:
     return torch.int64
 
 
+def schema_dtype_to_torch(dtype_name: str) -> torch.dtype:
+    mapping = {
+        "float32": torch.float32,
+        "float64": torch.float64,
+        "int32": torch.int32,
+        "int64": torch.int64,
+    }
+    try:
+        return mapping[dtype_name]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported schema dtype: {dtype_name}") from exc
+
+
+def validate_probability(name: str, value: float) -> float:
+    if not 0.0 <= value <= 1.0:
+        raise ValueError(f"{name} must be between 0.0 and 1.0, got {value}.")
+    return value
+
+
 @dataclass
 class TransformConfig:
     replay_dir: Path
@@ -85,6 +109,13 @@ class TransformConfig:
     player: str
     include_no_action: bool
     include_ui_actions: bool
+    action_filter_profile: str
+    filter_seed: int
+    no_action_keep_prob: float
+    select_units_keep_prob: float
+    move_order_keep_prob: float
+    gather_order_keep_prob: float
+    attack_order_keep_prob: float
     max_actions: int | None
     max_tick: int | None
     max_entities: int
@@ -111,6 +142,13 @@ def parse_args(argv: list[str]) -> TransformConfig:
     )
     parser.add_argument("--include-no-action", action="store_true")
     parser.add_argument("--include-ui-actions", action="store_true")
+    parser.add_argument("--action-filter-profile", choices=["none", "mas"], default="mas")
+    parser.add_argument("--filter-seed", type=int, default=0)
+    parser.add_argument("--no-action-keep-prob", type=float, default=0.0)
+    parser.add_argument("--select-units-keep-prob", type=float, default=0.2)
+    parser.add_argument("--move-order-keep-prob", type=float, default=0.1)
+    parser.add_argument("--gather-order-keep-prob", type=float, default=0.1)
+    parser.add_argument("--attack-order-keep-prob", type=float, default=0.5)
     parser.add_argument("--max-actions", type=int, default=None)
     parser.add_argument("--max-tick", type=int, default=None)
     parser.add_argument("--max-entities", type=int, default=128)
@@ -132,6 +170,13 @@ def parse_args(argv: list[str]) -> TransformConfig:
         player=str(args.player),
         include_no_action=bool(args.include_no_action),
         include_ui_actions=bool(args.include_ui_actions),
+        action_filter_profile=str(args.action_filter_profile),
+        filter_seed=int(args.filter_seed),
+        no_action_keep_prob=validate_probability("no_action_keep_prob", float(args.no_action_keep_prob)),
+        select_units_keep_prob=validate_probability("select_units_keep_prob", float(args.select_units_keep_prob)),
+        move_order_keep_prob=validate_probability("move_order_keep_prob", float(args.move_order_keep_prob)),
+        gather_order_keep_prob=validate_probability("gather_order_keep_prob", float(args.gather_order_keep_prob)),
+        attack_order_keep_prob=validate_probability("attack_order_keep_prob", float(args.attack_order_keep_prob)),
         max_actions=args.max_actions,
         max_tick=args.max_tick,
         max_entities=args.max_entities,
@@ -150,6 +195,97 @@ def validate_config(config: TransformConfig) -> None:
         raise FileNotFoundError(f"Chronodivide data directory does not exist: {config.data_dir}")
     if not config.py_chronodivide_script.exists():
         raise FileNotFoundError(f"py-chronodivide extractor does not exist: {config.py_chronodivide_script}")
+
+
+def get_schema_name_by_id(names: dict[str, Any], value: int | None) -> str | None:
+    if value is None:
+        return None
+    return names.get(str(int(value)))
+
+
+def get_action_family_name(sample: dict[str, Any], dataset: dict[str, Any]) -> str:
+    action_family_id = int(sample["labelTensors"]["actionFamilyId"][0])
+    action_families = dataset["schema"]["action"]["actionFamilies"]
+    if 0 <= action_family_id < len(action_families):
+        return str(action_families[action_family_id])
+    return "unknown"
+
+
+def get_order_type_name(sample: dict[str, Any], dataset: dict[str, Any]) -> str | None:
+    order_type_id = int(sample["labelTensors"]["orderTypeId"][0])
+    if order_type_id < 0:
+        return None
+    return get_schema_name_by_id(dataset["schema"]["action"]["orderTypeNames"], order_type_id)
+
+
+def stable_keep_fraction(
+    *,
+    replay_path: Path,
+    player_name: str,
+    sample: dict[str, Any],
+    sample_index: int,
+    filter_seed: int,
+) -> float:
+    key = "|".join(
+        [
+            str(filter_seed),
+            str(replay_path),
+            player_name,
+            str(sample.get("tick")),
+            str(sample.get("playerId")),
+            str(sample_index),
+            str(sample["labelTensors"]["rawActionId"][0]),
+            str(sample["labelTensors"]["actionFamilyId"][0]),
+        ]
+    )
+    digest = hashlib.sha256(key.encode("utf-8")).digest()
+    value = int.from_bytes(digest[:8], byteorder="big", signed=False)
+    return value / float(2**64 - 1)
+
+
+def get_sample_filter_bucket(sample: dict[str, Any], dataset: dict[str, Any]) -> tuple[str, float]:
+    filter_config = dataset["filterConfig"]
+    action_family = get_action_family_name(sample, dataset)
+
+    if action_family == "no_action":
+        return "no_action", float(filter_config["noActionKeepProb"])
+
+    if action_family == "select_units":
+        return "select_units", float(filter_config["selectUnitsKeepProb"])
+
+    if action_family == "order_units":
+        order_type_name = get_order_type_name(sample, dataset)
+        if order_type_name in {"Move", "ForceMove"}:
+            return "order_move", float(filter_config["moveOrderKeepProb"])
+        if order_type_name == "Gather":
+            return "order_gather", float(filter_config["gatherOrderKeepProb"])
+        if order_type_name in {"Attack", "ForceAttack", "AttackMove"}:
+            return "order_attack", float(filter_config["attackOrderKeepProb"])
+
+    return "keep_all", 1.0
+
+
+def build_player_action_counts(samples: list[dict[str, Any]], dataset: dict[str, Any]) -> dict[str, Any]:
+    raw_counts: dict[int, int] = {}
+    family_counts: dict[str, int] = {}
+
+    for sample in samples:
+        raw_action_id = int(sample["labelTensors"]["rawActionId"][0])
+        raw_counts[raw_action_id] = raw_counts.get(raw_action_id, 0) + 1
+
+        family_name = get_action_family_name(sample, dataset)
+        family_counts[family_name] = family_counts.get(family_name, 0) + 1
+
+    return {
+        "rawActionCounts": [
+            {"rawActionId": raw_action_id, "count": count}
+            for raw_action_id, count in sorted(raw_counts.items(), key=lambda item: item[0])
+        ],
+        "actionFamilyCounts": [
+            {"actionFamily": family_name, "count": count}
+            for family_name, count in sorted(family_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+    }
 
 
 def list_replays(config: TransformConfig) -> list[Path]:
@@ -245,6 +381,77 @@ def group_samples_by_player(samples: list[dict[str, Any]]) -> dict[str, list[dic
     return grouped
 
 
+def infer_nested_shape(value: Any) -> tuple[int, ...]:
+    if not isinstance(value, list):
+        return ()
+    if not value:
+        return (0,)
+
+    first_shape = infer_nested_shape(value[0])
+    for item in value[1:]:
+        item_shape = infer_nested_shape(item)
+        if item_shape != first_shape:
+            raise ValueError(f"Inconsistent nested shape: expected {first_shape}, got {item_shape}.")
+    return (len(value), *first_shape)
+
+
+def flatten_nested_values(value: Any) -> list[float | int]:
+    if not isinstance(value, list):
+        return [value]
+
+    flattened: list[float | int] = []
+    for item in value:
+        flattened.extend(flatten_nested_values(item))
+    return flattened
+
+
+def flatten_js_nested_numbers(value: Any) -> list[float | int]:
+    if not isinstance(value, list):
+        return [value]
+
+    flattened: list[float | int] = []
+    stack: list[Any] = [value]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, list):
+            for item in reversed(current):
+                stack.append(item)
+            continue
+        flattened.append(current)
+    flattened.reverse()
+    return flattened
+
+
+def flatten_section_value(value: Any, shape: list[int]) -> list[float | int]:
+    if len(shape) <= 1:
+        return flatten_nested_values(value)
+    return flatten_js_nested_numbers(value)
+
+
+def values_match(expected: list[Any], actual: list[Any], tolerance: float = 1e-6) -> bool:
+    if len(expected) != len(actual):
+        return False
+
+    for left, right in zip(expected, actual, strict=True):
+        if isinstance(left, bool) or isinstance(right, bool):
+            if bool(left) != bool(right):
+                return False
+            continue
+
+        if isinstance(left, int) and isinstance(right, int):
+            if left != right:
+                return False
+            continue
+
+        try:
+            if not math.isclose(float(left), float(right), rel_tol=tolerance, abs_tol=tolerance):
+                return False
+        except (TypeError, ValueError):
+            if left != right:
+                return False
+    return True
+
+
 def validate_flat_tensor_lengths(samples: list[dict[str, Any]], schema: dict[str, Any], replay_name: str, player_name: str) -> None:
     expected_feature_length = int(schema["flatFeatureLength"])
     expected_label_length = int(schema["flatLabelLength"])
@@ -264,12 +471,222 @@ def validate_flat_tensor_lengths(samples: list[dict[str, Any]], schema: dict[str
             )
 
 
+def validate_section_shapes(
+    samples: list[dict[str, Any]],
+    schema_sections: list[dict[str, Any]],
+    tensor_key: str,
+    replay_name: str,
+    player_name: str,
+) -> None:
+    for sample_index, sample in enumerate(samples):
+        tensor_sections = sample.get(tensor_key, {})
+        for section in schema_sections:
+            section_name = section["name"]
+            if section_name not in tensor_sections:
+                raise ValueError(
+                    f"{replay_name}/{player_name} sample {sample_index} is missing {tensor_key}.{section_name}."
+                )
+            observed_shape = infer_nested_shape(tensor_sections[section_name])
+            expected_shape = tuple(int(dimension) for dimension in section["shape"])
+            if observed_shape != expected_shape:
+                raise ValueError(
+                    f"{replay_name}/{player_name} sample {sample_index} has shape {observed_shape} for "
+                    f"{tensor_key}.{section_name}, expected {expected_shape}."
+                )
+
+
+def validate_flat_matches_sections(samples: list[dict[str, Any]], schema: dict[str, Any], replay_name: str, player_name: str) -> None:
+    feature_sections = schema["featureSections"]
+    label_sections = schema["labelSections"]
+
+    for sample_index, sample in enumerate(samples):
+        flattened_feature: list[Any] = []
+        for section in feature_sections:
+            flattened_feature.extend(flatten_section_value(sample["featureTensors"][section["name"]], section["shape"]))
+        if not values_match(flattened_feature, sample["flatFeatureTensor"]):
+            raise ValueError(
+                f"{replay_name}/{player_name} sample {sample_index} flat feature tensor does not match structured sections."
+            )
+
+        flattened_label: list[Any] = []
+        for section in label_sections:
+            flattened_label.extend(flatten_section_value(sample["labelTensors"][section["name"]], section["shape"]))
+        if not values_match(flattened_label, sample["flatLabelTensor"]):
+            raise ValueError(
+                f"{replay_name}/{player_name} sample {sample_index} flat label tensor does not match structured sections."
+            )
+
+
 def build_tensors(samples: list[dict[str, Any]]) -> tuple[torch.Tensor, torch.Tensor]:
     feature_rows = [sample["flatFeatureTensor"] for sample in samples]
     label_rows = [sample["flatLabelTensor"] for sample in samples]
     features = torch.tensor(feature_rows, dtype=feature_dtype())
     labels = torch.tensor(label_rows, dtype=label_dtype())
     return features, labels
+
+
+def build_structured_section_tensors(
+    samples: list[dict[str, Any]],
+    schema_sections: list[dict[str, Any]],
+    tensor_key: str,
+) -> dict[str, torch.Tensor]:
+    section_tensors: dict[str, torch.Tensor] = {}
+    for section in schema_sections:
+        section_name = section["name"]
+        rows = [sample[tensor_key][section_name] for sample in samples]
+        section_tensors[section_name] = torch.tensor(rows, dtype=schema_dtype_to_torch(str(section["dtype"])))
+    return section_tensors
+
+
+def build_sample_context_tensors(samples: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
+    ticks = torch.tensor([sample["tick"] for sample in samples], dtype=torch.int32)
+    player_ids = torch.tensor([sample["playerId"] for sample in samples], dtype=torch.int32)
+    return {
+        "ticks": ticks,
+        "playerIds": player_ids,
+    }
+
+
+def build_section_offsets(schema_sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    offsets: list[dict[str, Any]] = []
+    cursor = 0
+    for section in schema_sections:
+        length = 1
+        for dimension in section["shape"]:
+            length *= int(dimension)
+        offsets.append(
+            {
+                "name": section["name"],
+                "offset": cursor,
+                "length": length,
+                "shape": section["shape"],
+                "dtype": section["dtype"],
+            }
+        )
+        cursor += length
+    return offsets
+
+
+def rebuild_flat_tensor(sample: dict[str, Any], schema_sections: list[dict[str, Any]], tensor_key: str) -> list[float | int]:
+    flattened: list[float | int] = []
+    for section in schema_sections:
+        flattened.extend(flatten_section_value(sample[tensor_key][section["name"]], section["shape"]))
+    return flattened
+
+
+def rewrite_temporal_context(samples: list[dict[str, Any]]) -> None:
+    previous_tick: int | None = None
+    previous_raw_action_id = -1
+    previous_action_family_id = -1
+    previous_queue = -1
+
+    for sample in samples:
+        current_tick = int(sample["tick"])
+        delay_from_previous = -1 if previous_tick is None else current_tick - previous_tick
+        sample["featureTensors"]["lastActionContext"] = [
+            delay_from_previous,
+            previous_raw_action_id,
+            previous_action_family_id,
+            previous_queue,
+        ]
+
+        previous_tick = current_tick
+        previous_raw_action_id = int(sample["labelTensors"]["rawActionId"][0])
+        previous_action_family_id = int(sample["labelTensors"]["actionFamilyId"][0])
+        previous_queue = int(sample["labelTensors"]["queue"][0])
+
+    for index, sample in enumerate(samples):
+        next_tick = int(samples[index + 1]["tick"]) if index + 1 < len(samples) else None
+        sample["labelTensors"]["delayToNextAction"] = [
+            -1 if next_tick is None else next_tick - int(sample["tick"])
+        ]
+
+
+def build_filter_config(config: TransformConfig) -> dict[str, Any]:
+    return {
+        "profile": config.action_filter_profile,
+        "filterSeed": config.filter_seed,
+        "noActionKeepProb": config.no_action_keep_prob,
+        "selectUnitsKeepProb": config.select_units_keep_prob,
+        "moveOrderKeepProb": config.move_order_keep_prob,
+        "gatherOrderKeepProb": config.gather_order_keep_prob,
+        "attackOrderKeepProb": config.attack_order_keep_prob,
+        "notes": [
+            "This filter is applied in chronodivide-bot-sl after py-chronodivide extracts the action-aligned sample stream.",
+            "Temporal fields are rewritten on the final kept stream so lastActionContext and delayToNextAction stay consistent.",
+            "The default mas profile downsamples common RA2 action patterns analogously to mini-AlphaStar's replay filtering.",
+        ],
+    }
+
+
+def apply_action_filter_profile(
+    config: TransformConfig,
+    dataset: dict[str, Any],
+    replay_path: Path,
+    player_name: str,
+    samples: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    source_count = len(samples)
+    if config.action_filter_profile == "none":
+        kept_samples = list(samples)
+        if kept_samples:
+            rewrite_temporal_context(kept_samples)
+            for sample in kept_samples:
+                sample["flatFeatureTensor"] = rebuild_flat_tensor(sample, dataset["schema"]["featureSections"], "featureTensors")
+                sample["flatLabelTensor"] = rebuild_flat_tensor(sample, dataset["schema"]["labelSections"], "labelTensors")
+        return kept_samples, {
+            "profile": "none",
+            "sourceSampleCount": source_count,
+            "keptSampleCount": len(kept_samples),
+            "droppedSampleCount": source_count - len(kept_samples),
+            "bucketCounts": [],
+        }
+
+    bucket_counts: dict[str, dict[str, Any]] = {}
+    kept_samples: list[dict[str, Any]] = []
+    for sample_index, sample in enumerate(samples):
+        bucket_name, keep_prob = get_sample_filter_bucket(sample, dataset)
+        bucket_record = bucket_counts.setdefault(
+            bucket_name,
+            {
+                "bucket": bucket_name,
+                "keepProb": keep_prob,
+                "before": 0,
+                "kept": 0,
+                "dropped": 0,
+            },
+        )
+        bucket_record["before"] += 1
+
+        keep = keep_prob >= 1.0
+        if not keep:
+            keep = stable_keep_fraction(
+                replay_path=replay_path,
+                player_name=player_name,
+                sample=sample,
+                sample_index=sample_index,
+                filter_seed=config.filter_seed,
+            ) < keep_prob
+
+        if keep:
+            bucket_record["kept"] += 1
+            kept_samples.append(sample)
+        else:
+            bucket_record["dropped"] += 1
+
+    if kept_samples:
+        rewrite_temporal_context(kept_samples)
+        for sample in kept_samples:
+            sample["flatFeatureTensor"] = rebuild_flat_tensor(sample, dataset["schema"]["featureSections"], "featureTensors")
+            sample["flatLabelTensor"] = rebuild_flat_tensor(sample, dataset["schema"]["labelSections"], "labelTensors")
+
+    return kept_samples, {
+        "profile": config.action_filter_profile,
+        "sourceSampleCount": source_count,
+        "keptSampleCount": len(kept_samples),
+        "droppedSampleCount": source_count - len(kept_samples),
+        "bucketCounts": sorted(bucket_counts.values(), key=lambda item: item["bucket"]),
+    }
 
 
 def player_output_stem(replay_path: Path, player_name: str) -> str:
@@ -282,26 +699,44 @@ def write_player_shard(
     dataset: dict[str, Any],
     player_name: str,
     samples: list[dict[str, Any]],
+    filter_stats: dict[str, Any],
+    player_counts: dict[str, Any],
 ) -> dict[str, Any]:
     output_stem = player_output_stem(replay_path, player_name)
     tensor_path = config.output_dir / f"{output_stem}.pt"
+    structured_tensor_path = config.output_dir / f"{output_stem}.sections.pt"
     metadata_path = config.output_dir / f"{output_stem}.meta.json"
 
-    if tensor_path.exists() and metadata_path.exists() and not config.overwrite:
+    if tensor_path.exists() and structured_tensor_path.exists() and metadata_path.exists() and not config.overwrite:
         return {
             "status": "skipped",
             "replay": str(replay_path),
             "playerName": player_name,
             "tensorPath": str(tensor_path),
+            "structuredTensorPath": str(structured_tensor_path),
             "metadataPath": str(metadata_path),
             "reason": "existing shard",
         }
 
     validate_flat_tensor_lengths(samples, dataset["schema"], replay_path.name, player_name)
+    validate_section_shapes(samples, dataset["schema"]["featureSections"], "featureTensors", replay_path.name, player_name)
+    validate_section_shapes(samples, dataset["schema"]["labelSections"], "labelTensors", replay_path.name, player_name)
+    validate_flat_matches_sections(samples, dataset["schema"], replay_path.name, player_name)
     features, labels = build_tensors(samples)
+    feature_section_tensors = build_structured_section_tensors(samples, dataset["schema"]["featureSections"], "featureTensors")
+    label_section_tensors = build_structured_section_tensors(samples, dataset["schema"]["labelSections"], "labelTensors")
+    sample_context_tensors = build_sample_context_tensors(samples)
 
     ensure_parent(tensor_path)
     torch.save((features, labels), tensor_path)
+    torch.save(
+        {
+            "featureTensors": feature_section_tensors,
+            "labelTensors": label_section_tensors,
+            "sampleContext": sample_context_tensors,
+        },
+        structured_tensor_path,
+    )
 
     metadata = {
         "createdAt": utc_now_iso(),
@@ -313,9 +748,24 @@ def write_player_shard(
         "featureDType": str(features.dtype),
         "labelDType": str(labels.dtype),
         "schema": dataset["schema"],
+        "featureSectionOffsets": build_section_offsets(dataset["schema"]["featureSections"]),
+        "labelSectionOffsets": build_section_offsets(dataset["schema"]["labelSections"]),
+        "structuredFeatureShapes": {
+            name: list(tensor.shape) for name, tensor in feature_section_tensors.items()
+        },
+        "structuredLabelShapes": {
+            name: list(tensor.shape) for name, tensor in label_section_tensors.items()
+        },
+        "sampleContextShapes": {
+            name: list(tensor.shape) for name, tensor in sample_context_tensors.items()
+        },
         "sourceOptions": dataset["options"],
         "sourceCounts": dataset["counts"],
+        "playerCounts": player_counts,
+        "actionFilter": filter_stats,
+        "filterConfig": dataset["filterConfig"],
         "tensorPath": str(tensor_path),
+        "structuredTensorPath": str(structured_tensor_path),
     }
     ensure_parent(metadata_path)
     with metadata_path.open("w", encoding="utf-8") as handle:
@@ -326,15 +776,19 @@ def write_player_shard(
         "replay": str(replay_path),
         "playerName": player_name,
         "sampleCount": len(samples),
+        "sourceSampleCount": int(filter_stats["sourceSampleCount"]),
+        "droppedSampleCount": int(filter_stats["droppedSampleCount"]),
         "featureShape": list(features.shape),
         "labelShape": list(labels.shape),
         "tensorPath": str(tensor_path),
+        "structuredTensorPath": str(structured_tensor_path),
         "metadataPath": str(metadata_path),
     }
 
 
 def transform_single_replay(config: TransformConfig, replay_path: Path) -> list[dict[str, Any]]:
     dataset = run_py_chronodivide_extract(config, replay_path)
+    dataset["filterConfig"] = build_filter_config(config)
     grouped_samples = group_samples_by_player(dataset.get("samples", []))
     if not grouped_samples:
         return [
@@ -347,7 +801,32 @@ def transform_single_replay(config: TransformConfig, replay_path: Path) -> list[
 
     shard_results = []
     for player_name, player_samples in grouped_samples.items():
-        shard_results.append(write_player_shard(config, replay_path, dataset, player_name, player_samples))
+        filtered_samples, filter_stats = apply_action_filter_profile(config, dataset, replay_path, player_name, player_samples)
+        if not filtered_samples:
+            shard_results.append(
+                {
+                    "status": "empty",
+                    "replay": str(replay_path),
+                    "playerName": player_name,
+                    "reason": "all samples were dropped by action filtering",
+                    "sourceSampleCount": int(filter_stats["sourceSampleCount"]),
+                    "droppedSampleCount": int(filter_stats["droppedSampleCount"]),
+                }
+            )
+            continue
+
+        player_counts = build_player_action_counts(filtered_samples, dataset)
+        shard_results.append(
+            write_player_shard(
+                config,
+                replay_path,
+                dataset,
+                player_name,
+                filtered_samples,
+                filter_stats,
+                player_counts,
+            )
+        )
     return shard_results
 
 
