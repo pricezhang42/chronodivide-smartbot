@@ -127,6 +127,7 @@ node .\packages\py-chronodivide\resim.mjs `
   --include-player-production true `
   --include-player-stats true `
   --include-static-data true `
+  --include-static-map true `
   --output .\packages\py-chronodivide\sample_00758dde_rich.json
 ```
 
@@ -138,6 +139,8 @@ When enabled, the replay JSON root also includes:
 - `staticData`
 - `stoppedTick`
 - `playbackReachedEnd`
+
+When `--include-static-map` is enabled, `staticData.mapDump` is captured at replay-start tick `0`, before playback can mutate map-state objects.
 
 ## Example: Observation Fidelity Audit
 
@@ -241,6 +244,12 @@ From the current probe, the accessible reconstructed state includes:
 - map dimensions
 - map theater type and player starting locations
 - static `GeneralRules`, `rules.ini`, `art.ini`, and `ai.ini` snapshots
+- full static map dump with:
+  - per-tile geometry and land types
+  - bridge flags
+  - map tags
+  - per-tile resource summaries
+  - terrain-object and neutral-object placement
 - unit / building IDs
 - owner
 - type / name
@@ -249,11 +258,15 @@ From the current probe, the accessible reconstructed state includes:
 - HP
 - sight / veterancy / guard mode / purchase value
 - build / movement / stance-related fields exposed by `GameApi`
+- weapon speed / cooldown and death-weapon presence
+- factory delivery state
 - super-weapon timers / status
 - neutral units and terrain objects
 - tile-resource records
 - fog/shroud-derived visibility for a chosen player
 - visible tile lists and visible resource tiles for a chosen player
+
+Optional object fields stay sparse in JSON: if the engine field is `undefined` at that tick, the key is omitted instead of being written as `null`.
 
 ## Important Observation Caveat
 
@@ -284,6 +297,7 @@ Heavy recording flags on `resim.mjs`:
 - `--include-player-production`
 - `--include-player-stats`
 - `--include-static-data`
+- `--include-static-map`
 
 ## What Is Still Missing
 

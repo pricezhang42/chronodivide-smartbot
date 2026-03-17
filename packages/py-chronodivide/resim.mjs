@@ -14,6 +14,7 @@ function usage() {
     "                 [--include-terrain-objects true|false] [--include-neutral-units true|false]",
     "                 [--include-tile-resources true|false] [--include-player-production true|false]",
     "                 [--include-player-stats true|false] [--include-static-data true|false]",
+    "                 [--include-static-map true|false]",
     "                 [--output <path>]",
     "",
     "Example:",
@@ -47,6 +48,7 @@ async function main() {
   const includePlayerProduction = Boolean(args["include-player-production"] ?? false);
   const includePlayerStats = Boolean(args["include-player-stats"] ?? false);
   const includeStaticData = Boolean(args["include-static-data"] ?? false);
+  const includeStaticMap = Boolean(args["include-static-map"] ?? false);
   if (!["global", "observation"].includes(sampleMode)) {
     throw new Error(`Expected --sample-mode to be "global" or "observation", got "${sampleMode}".`);
   }
@@ -69,6 +71,7 @@ async function main() {
     includePlayerProduction,
     includePlayerStats,
     includeStaticData,
+    includeStaticMap,
   });
 
   const json = JSON.stringify(result, null, 2);

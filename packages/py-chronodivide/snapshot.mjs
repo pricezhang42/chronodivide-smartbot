@@ -71,6 +71,12 @@ const SUPER_WEAPON_STATUS_NAMES = {
   2: "Ready",
 };
 
+const TAG_REPEAT_TYPE_NAMES = {
+  0: "OnceAny",
+  1: "OnceAll",
+  2: "Repeat",
+};
+
 function safeNumber(value, fallback = undefined) {
   return Number.isFinite(value) ? value : fallback;
 }
@@ -156,9 +162,7 @@ function factoryToPlain(factory) {
 
   return {
     status: factory.status,
-    progress: factory.progress,
-    queueType: factory.queueType,
-    objectName: factory.objectName,
+    deliveringUnit: safeNumber(factory.deliveringUnit),
   };
 }
 
@@ -256,6 +260,11 @@ function weaponToPlain(weapon) {
     type: weapon.type,
     minRange: weapon.minRange,
     maxRange: weapon.maxRange,
+    speed: safeNumber(weapon.speed),
+    cooldownTicks: safeNumber(weapon.cooldownTicks),
+    weaponName: weapon.rules?.name,
+    projectileName: weapon.projectileRules?.name,
+    warheadName: weapon.warheadRules?.name,
   };
 }
 
@@ -287,11 +296,37 @@ function resourceTileToPlain(resource) {
   };
 }
 
+function tileResourceOnTileToPlain(resource) {
+  if (!resource) {
+    return undefined;
+  }
+
+  return {
+    gems: safeNumber(resource.gems, 0),
+    ore: safeNumber(resource.ore, 0),
+    spawnsOre: Boolean(resource.spawnsOre),
+  };
+}
+
 function mapToPlain(gameApi) {
   return {
     ...gameApi.map.getRealMapSize(),
     theaterType: gameApi.map.getTheaterType(),
     startingLocations: gameApi.map.getStartingLocations().map(vectorToPlain),
+  };
+}
+
+function tagToPlain(tag) {
+  if (!tag) {
+    return undefined;
+  }
+
+  return {
+    id: tag.id,
+    name: tag.name,
+    triggerId: tag.triggerId,
+    repeatType: tag.repeatType,
+    repeatTypeName: TAG_REPEAT_TYPE_NAMES[tag.repeatType] ?? `TagRepeatType_${tag.repeatType}`,
   };
 }
 
@@ -401,6 +436,7 @@ function unitToPlain(unit) {
     veteranLevel: unit.veteranLevel,
     guardMode: unit.guardMode,
     purchaseValue: unit.purchaseValue,
+    deathWeapon: weaponToPlain(unit.deathWeapon),
     foundation: unit.foundation
       ? {
           width: unit.foundation.width,
@@ -459,6 +495,86 @@ function collectVisibleTiles(gameApi, playerName) {
   }
 
   return visibleTiles;
+}
+
+export function collectStaticMapDump(
+  gameApi,
+  {
+    includeTerrainObjects = true,
+    includeNeutralObjects = true,
+  } = {},
+) {
+  const summary = mapToPlain(gameApi);
+  const tiles = gameApi.map
+    .getTilesInRect({ x: 0, y: 0, width: summary.width, height: summary.height })
+    .slice()
+    .sort((left, right) => (left.ry - right.ry) || (left.rx - right.rx));
+  const terrainObjectIds = gameApi.getAllTerrainObjects().slice().sort((left, right) => left - right);
+  const neutralObjectIds = gameApi.getNeutralUnits().slice().sort((left, right) => left - right);
+  const terrainObjectIdSet = new Set(terrainObjectIds);
+  const neutralObjectIdSet = new Set(neutralObjectIds);
+  let bridgeTileCount = 0;
+  let highBridgeTileCount = 0;
+  let taggedTileCount = 0;
+  let resourceTileCount = 0;
+
+  const tileDump = tiles.map((tile) => {
+    const hasBridge = gameApi.map.hasBridgeOnTile(tile);
+    const hasHighBridge = gameApi.map.hasHighBridgeOnTile(tile);
+    const resource = gameApi.map.getTileResourceData(tile);
+    const objectIds = gameApi.map.getObjectsOnTile(tile);
+    const terrainIds = objectIds.filter((id) => terrainObjectIdSet.has(id)).sort((left, right) => left - right);
+    const neutralIds = objectIds.filter((id) => neutralObjectIdSet.has(id)).sort((left, right) => left - right);
+
+    if (hasBridge) {
+      bridgeTileCount += 1;
+    }
+    if (hasHighBridge) {
+      highBridgeTileCount += 1;
+    }
+    if (tile.tag) {
+      taggedTileCount += 1;
+    }
+    if (resource) {
+      resourceTileCount += 1;
+    }
+
+    return {
+      x: tile.rx,
+      y: tile.ry,
+      dx: tile.dx,
+      dy: tile.dy,
+      z: tile.z,
+      tileNum: tile.tileNum,
+      subTile: tile.subTile,
+      terrainType: tile.terrainType,
+      landType: tile.landType,
+      onBridgeLandType: tile.onBridgeLandType,
+      rampType: tile.rampType,
+      id: tile.id,
+      occluded: Boolean(tile.occluded),
+      hasBridge,
+      hasHighBridge,
+      tag: tagToPlain(tile.tag),
+      resource: tileResourceOnTileToPlain(resource),
+      terrainObjectIds: terrainIds.length ? terrainIds : undefined,
+      neutralObjectIds: neutralIds.length ? neutralIds : undefined,
+    };
+  });
+
+  return {
+    ...summary,
+    tileCount: tileDump.length,
+    bridgeTileCount,
+    highBridgeTileCount,
+    taggedTileCount,
+    resourceTileCount,
+    terrainObjectCount: terrainObjectIds.length,
+    neutralObjectCount: neutralObjectIds.length,
+    terrainObjects: includeTerrainObjects ? collectUnitsByIds(gameApi, terrainObjectIds, null) : undefined,
+    neutralObjects: includeNeutralObjects ? collectUnitsByIds(gameApi, neutralObjectIds, null) : undefined,
+    tiles: tileDump,
+  };
 }
 
 export function collectVisibilitySnapshot(gameApi, playerName, { includeVisibleTiles = false } = {}) {
@@ -650,13 +766,15 @@ export function collectGameSnapshot(
   return snapshot;
 }
 
-export function collectStaticGameData(gameApi) {
+export function collectStaticGameData(gameApi, { includeMapDump = false } = {}) {
   return {
+    capturedTick: gameApi.getCurrentTick(),
     map: mapToPlain(gameApi),
     generalRules: toPlainRecursive(gameApi.getGeneralRules()),
     rulesIni: iniFileToPlain(gameApi.getRulesIni()),
     artIni: iniFileToPlain(gameApi.getArtIni()),
     aiIni: iniFileToPlain(gameApi.getAiIni()),
+    mapDump: includeMapDump ? collectStaticMapDump(gameApi) : undefined,
   };
 }
 

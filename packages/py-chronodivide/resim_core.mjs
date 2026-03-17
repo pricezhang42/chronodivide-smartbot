@@ -237,6 +237,7 @@ export async function resimulateReplay({
   includePlayerProduction = false,
   includePlayerStats = false,
   includeStaticData = false,
+  includeStaticMap = false,
 } = {}) {
   const context = await createReplayResimContext({
     dataDir,
@@ -244,6 +245,9 @@ export async function resimulateReplay({
   });
 
   const resolvedPlayerName = playerName ?? context.replay.gameOpts.humanPlayers[0]?.name ?? null;
+  const staticData = includeStaticData
+    ? collectStaticGameData(context.gameApi, { includeMapDump: includeStaticMap })
+    : undefined;
   const samples = collectReplaySamples(context, {
     playerName: resolvedPlayerName,
     maxTick,
@@ -261,7 +265,6 @@ export async function resimulateReplay({
     includePlayerStats,
   });
 
-  const staticData = includeStaticData ? collectStaticGameData(context.gameApi) : undefined;
   const playerStatsAtStop = includePlayerStats
     ? collectPlayerStatsAtCurrentTick(context.gameApi, context.internalGame)
     : undefined;

@@ -48,8 +48,8 @@ Legend:
 - `[x]` movement / stance / bridge / zone data exposed by `GameApi`
 - `[x]` build / factory / rally-point state
 - `[x]` ammo / transport / garrison / repair-related state
-- `[x]` weapon summaries
-- `[~]` Every engine-exposed transient field for every object category
+- `[x]` weapon transient state such as range, speed, cooldown, and death-weapon presence
+- `[x]` Every currently exposed transient field in public `GameObjectData` / `UnitData` / `WeaponData` / `FactoryData`
 
 ## Observation Recording
 
@@ -67,6 +67,7 @@ Legend:
 - `[x]` Structured `rules.ini` snapshot
 - `[x]` Structured `art.ini` snapshot
 - `[x]` Structured `ai.ini` snapshot
+- `[x]` Full static map dump with per-tile geometry, land types, bridge flags, resources, tags, and static object placement
 - `[~]` Exact original file-text preservation in exported replay samples
 
 ## Replay Action Data
@@ -79,9 +80,13 @@ Legend:
 ## Current Known Gaps
 
 - `[ ]` Public normalized export for non-turn replay events such as chat / other replay-side metadata events
-- `[ ]` Full static map dump beyond the current map summary and sampled terrain-object records
 - `[ ]` Framework-native tensor shard writers such as `.pt` / `.npz`
 - `[ ]` Dataset-transformer package in `chronodivide-bot-sl` that consumes the reusable `py-chronodivide` APIs
+
+Optional fields remain sparse in JSON:
+
+- if the engine field is `undefined` at a sampled tick, the exported snapshot omits that key instead of writing `null`
+- static map dumps are captured at replay-start tick `0`
 
 ## Practical Conclusion
 
