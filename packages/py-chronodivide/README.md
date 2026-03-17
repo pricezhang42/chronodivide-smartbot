@@ -38,6 +38,15 @@ This toolkit handles that by generating a small runtime bridge next to the insta
   - all units / buildings on the map
   - player-visible self / allied / enemy / hostile units
   - tile visibility count from fog/shroud state
+- The replay snapshot path now also records richer replay-state data when requested:
+  - unit sight / veterancy / guard mode / purchase value
+  - map theater and starting locations
+  - player defeated / resigned / dropped / score state
+  - player economy / combat counters such as credits gained, units built / lost / killed, buildings captured, and crates picked up
+  - production queues and available objects
+  - super-weapon status
+  - terrain objects, neutral units, and tile-resource records
+  - static engine rules data from `General`, `rules.ini`, `art.ini`, and `ai.ini`
 - A replay feature extractor now turns player-correct observations into SL-safe feature records:
   - `34` scalar features
   - `50` per-entity numeric features plus object-name tokens
@@ -71,6 +80,8 @@ This toolkit handles that by generating a small runtime bridge next to the insta
   CLI that writes one replay's supervised-learning tensor dataset as JSON.
 - `RA2_SL_TENSOR_DATASET.md`
   Notes on the current action-aligned tensor dataset schema and caveats.
+- `REPLAY_RECORDING_CHECKLIST.md`
+  Coverage checklist for replay reconstruction and recording support.
 - `labels.mjs`
   Replay action-to-label encoder for structured SL supervision targets.
 - `extract_labels.mjs`
@@ -99,6 +110,34 @@ node .\packages\py-chronodivide\resim.mjs `
   --sample-mode observation `
   --output .\packages\py-chronodivide\sample_00758dde.json
 ```
+
+## Example: Re-Simulate With Rich Recording
+
+```powershell
+node .\packages\py-chronodivide\resim.mjs `
+  --replay .\packages\chronodivide-bot-sl\ladder_replays_top50\00758dde-b725-4442-ae8f-a657069251a0.rpl `
+  --data-dir d:\workspace\ra2-headless-mix `
+  --max-tick 600 `
+  --sample-ticks 600 `
+  --sample-mode global `
+  --include-super-weapons true `
+  --include-terrain-objects true `
+  --include-neutral-units true `
+  --include-tile-resources true `
+  --include-player-production true `
+  --include-player-stats true `
+  --include-static-data true `
+  --output .\packages\py-chronodivide\sample_00758dde_rich.json
+```
+
+These richer fields are opt-in because they can make snapshot files much larger.
+
+When enabled, the replay JSON root also includes:
+
+- `playerStatsAtStop`
+- `staticData`
+- `stoppedTick`
+- `playbackReachedEnd`
 
 ## Example: Observation Fidelity Audit
 
@@ -195,16 +234,26 @@ From the current probe, the accessible reconstructed state includes:
 - per-player metadata
 - credits
 - power totals / drain / low-power flag
+- defeated / resigned / dropped / score state
+- player economy / combat counters such as credits gained and built / killed / lost object counts
 - radar disabled state
+- production queues, queue items, and available production objects
 - map dimensions
+- map theater type and player starting locations
+- static `GeneralRules`, `rules.ini`, `art.ini`, and `ai.ini` snapshots
 - unit / building IDs
 - owner
 - type / name
 - tile position
 - world position
 - HP
+- sight / veterancy / guard mode / purchase value
 - build / movement / stance-related fields exposed by `GameApi`
+- super-weapon timers / status
+- neutral units and terrain objects
+- tile-resource records
 - fog/shroud-derived visibility for a chosen player
+- visible tile lists and visible resource tiles for a chosen player
 
 ## Important Observation Caveat
 
@@ -224,9 +273,25 @@ Unsafe for SL features if you want player-correct observations:
 
 This is why `resim.mjs` now supports `--sample-mode observation` in addition to the older global debug snapshot mode.
 
+Heavy recording flags on `resim.mjs`:
+
+- `--include-visible-tiles`
+- `--include-visible-resource-tiles`
+- `--include-super-weapons`
+- `--include-terrain-objects`
+- `--include-neutral-units`
+- `--include-tile-resources`
+- `--include-player-production`
+- `--include-player-stats`
+- `--include-static-data`
+
 ## What Is Still Missing
 
 This now produces the feature side, the label side, and an action-aligned JSON tensor dataset for one replay, but it does not yet write framework-native `.pt` or `.npz` shards.
+
+For replay recording coverage specifically, see:
+
+- `REPLAY_RECORDING_CHECKLIST.md`
 
 What this phase does provide is the hard part:
 

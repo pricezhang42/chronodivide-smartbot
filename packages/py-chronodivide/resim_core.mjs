@@ -2,7 +2,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { loadGameApiBridge } from "./bridge.mjs";
-import { collectGameSnapshot, collectPlayerObservationSnapshot } from "./snapshot.mjs";
+import {
+  collectGameSnapshot,
+  collectPlayerObservationSnapshot,
+  collectPlayerStatsAtCurrentTick,
+  collectStaticGameData,
+} from "./snapshot.mjs";
 
 const initializedDataDirsByBridge = new WeakMap();
 
@@ -152,6 +157,14 @@ export function collectReplaySamples(
     sampleTicks = [],
     unitLimit = null,
     sampleMode = "global",
+    includeVisibleTiles = false,
+    includeVisibleResourceTiles = false,
+    includeSuperWeapons = false,
+    includeTerrainObjects = false,
+    includeNeutralUnits = false,
+    includeTileResources = false,
+    includePlayerProduction = false,
+    includePlayerStats = false,
   } = {},
 ) {
   const resolvedMaxTick = Math.min(maxTick ?? context.replay.endTick, context.replay.endTick);
@@ -176,6 +189,12 @@ export function collectReplaySamples(
           collectPlayerObservationSnapshot(context.gameApi, {
             playerName,
             unitLimit,
+            internalGame: context.internalGame,
+            includeVisibleTiles,
+            includeVisibleResourceTiles,
+            includeSuperWeapons,
+            includeProduction: includePlayerProduction,
+            includePlayerStats,
           }),
         );
       } else {
@@ -183,6 +202,14 @@ export function collectReplaySamples(
           collectGameSnapshot(context.gameApi, {
             playerName,
             unitLimit,
+            internalGame: context.internalGame,
+            includeVisibleTiles,
+            includeSuperWeapons,
+            includeTerrainObjects,
+            includeNeutralUnits,
+            includeTileResources,
+            includePlayerProduction,
+            includePlayerStats,
           }),
         );
       }
@@ -201,6 +228,15 @@ export async function resimulateReplay({
   sampleTicks = [],
   unitLimit = null,
   sampleMode = "global",
+  includeVisibleTiles = false,
+  includeVisibleResourceTiles = false,
+  includeSuperWeapons = false,
+  includeTerrainObjects = false,
+  includeNeutralUnits = false,
+  includeTileResources = false,
+  includePlayerProduction = false,
+  includePlayerStats = false,
+  includeStaticData = false,
 } = {}) {
   const context = await createReplayResimContext({
     dataDir,
@@ -215,7 +251,21 @@ export async function resimulateReplay({
     sampleTicks,
     unitLimit,
     sampleMode,
+    includeVisibleTiles,
+    includeVisibleResourceTiles,
+    includeSuperWeapons,
+    includeTerrainObjects,
+    includeNeutralUnits,
+    includeTileResources,
+    includePlayerProduction,
+    includePlayerStats,
   });
+
+  const staticData = includeStaticData ? collectStaticGameData(context.gameApi) : undefined;
+  const playerStatsAtStop = includePlayerStats
+    ? collectPlayerStatsAtCurrentTick(context.gameApi, context.internalGame)
+    : undefined;
+  const stoppedTick = context.gameApi.getCurrentTick();
 
   return {
     replay: {
@@ -234,6 +284,10 @@ export async function resimulateReplay({
     dataDir: context.dataDir,
     sampledPlayer: resolvedPlayerName,
     sampleMode,
+    stoppedTick,
+    playbackReachedEnd: stoppedTick >= context.replay.endTick,
+    playerStatsAtStop,
+    staticData,
     samples,
   };
 }

@@ -9,7 +9,12 @@ function usage() {
     "Usage:",
     "  node resim.mjs --replay <path> --data-dir <path> [--player <name>] [--max-tick <n>]",
     "                 [--sample-every <n>] [--sample-ticks 1,50,100] [--unit-limit <n>]",
-    "                 [--sample-mode global|observation] [--output <path>]",
+    "                 [--sample-mode global|observation] [--include-visible-tiles true|false]",
+    "                 [--include-visible-resource-tiles true|false] [--include-super-weapons true|false]",
+    "                 [--include-terrain-objects true|false] [--include-neutral-units true|false]",
+    "                 [--include-tile-resources true|false] [--include-player-production true|false]",
+    "                 [--include-player-stats true|false] [--include-static-data true|false]",
+    "                 [--output <path>]",
     "",
     "Example:",
     "  node resim.mjs \\",
@@ -33,6 +38,15 @@ async function main() {
   const unitLimit = parseIntegerArg(args["unit-limit"], null, "unit-limit");
   const sampleTicks = parseCsvIntegerArg(args["sample-ticks"]);
   const sampleMode = String(args["sample-mode"] ?? "global");
+  const includeVisibleTiles = Boolean(args["include-visible-tiles"] ?? false);
+  const includeVisibleResourceTiles = Boolean(args["include-visible-resource-tiles"] ?? false);
+  const includeSuperWeapons = Boolean(args["include-super-weapons"] ?? false);
+  const includeTerrainObjects = Boolean(args["include-terrain-objects"] ?? false);
+  const includeNeutralUnits = Boolean(args["include-neutral-units"] ?? false);
+  const includeTileResources = Boolean(args["include-tile-resources"] ?? false);
+  const includePlayerProduction = Boolean(args["include-player-production"] ?? false);
+  const includePlayerStats = Boolean(args["include-player-stats"] ?? false);
+  const includeStaticData = Boolean(args["include-static-data"] ?? false);
   if (!["global", "observation"].includes(sampleMode)) {
     throw new Error(`Expected --sample-mode to be "global" or "observation", got "${sampleMode}".`);
   }
@@ -46,6 +60,15 @@ async function main() {
     sampleTicks,
     unitLimit,
     sampleMode,
+    includeVisibleTiles,
+    includeVisibleResourceTiles,
+    includeSuperWeapons,
+    includeTerrainObjects,
+    includeNeutralUnits,
+    includeTileResources,
+    includePlayerProduction,
+    includePlayerStats,
+    includeStaticData,
   });
 
   const json = JSON.stringify(result, null, 2);
