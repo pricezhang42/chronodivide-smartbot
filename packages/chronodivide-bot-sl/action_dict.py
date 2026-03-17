@@ -15,8 +15,9 @@ from __future__ import annotations
 from typing import Any
 
 
-STATIC_ACTION_DICT_VERSION = "ra2_sl_v2"
+STATIC_ACTION_DICT_VERSION = "ra2_sl_v4"
 UNKNOWN_ACTION_TYPE_NAME = "<unk>"
+UNKNOWN_QUEUE_UPDATE_TYPE_NAME = "<unk_queue_update>"
 UNKNOWN_QUEUE_ITEM_NAME = "<unk_item>"
 UNKNOWN_BUILDING_NAME = "<unk_building>"
 UNKNOWN_SUPER_WEAPON_NAME = "<unk_super_weapon>"
@@ -43,7 +44,14 @@ ORDER_TYPE_NAMES = [
     "EnterTransport",
     "PlaceBomb",
 ]
-QUEUE_UPDATE_TYPE_NAMES = ["Add", "Cancel", "Hold"]
+QUEUE_UPDATE_TYPE_NAMES = [
+    "Add",
+    "Cancel",
+    "Hold",
+    "QueueUpdateType_3",
+    "QueueUpdateType_4",
+    UNKNOWN_QUEUE_UPDATE_TYPE_NAME,
+]
 SUPER_WEAPON_TYPE_NAMES = [
     "MultiMissile",
     "IronCurtain",
@@ -59,65 +67,103 @@ SUPER_WEAPON_TYPE_NAMES = [
 QUEUE_ITEM_NAMES = sorted(
     [
         "ADOG",
+        "AMCV",
         "AMRADR",
         "ATESLA",
+        "BEAG",
         "CLEG",
         "CMIN",
+        "CARRIER",
         "DESO",
+        "DEST",
         "DOG",
+        "DRON",
         "E1",
         "E2",
         "ENGINEER",
         "FV",
+        "GAAIRC",
         "GACSPH",
+        "GADEPT",
         "GAOREP",
         "GAPILE",
         "GAPILL",
+        "GAGAP",
         "GAPOWR",
         "GAREFN",
         "GATECH",
+        "GASPYSAT",
+        "GAWALL",
         "GAWEAP",
         "GAWEAT",
+        "GAYARD",
+        "GTGCAN",
         "HARV",
         "HTK",
         "HTNK",
         "JUMPJET",
+        "LCRF",
         "MGTK",
         "MTNK",
+        "NACLON",
+        "NADEPT",
         "NAFLAK",
         "NAHAND",
+        "NAIRON",
         "NALASR",
+        "NAMISL",
         "NANRCT",
+        "NAPSIS",
         "NAPOWR",
         "NARADR",
         "NAREFN",
+        "NASAM",
         "NATECH",
         "NAWEAP",
         "ORCA",
         "SENGINEER",
+        "SHK",
+        "SMCV",
+        "SNIPE",
         "SPY",
         "SREF",
+        "TANY",
+        "V3",
     ]
 )
 PLACE_BUILDING_NAMES = sorted(
     [
         "AMRADR",
         "ATESLA",
+        "GAAIRC",
         "GACSPH",
+        "GADEPT",
         "GAOREP",
         "GAPILE",
         "GAPILL",
+        "GAGAP",
         "GAPOWR",
         "GAREFN",
         "GATECH",
+        "GASPYSAT",
+        "GAWALL",
         "GAWEAP",
         "GAWEAT",
+        "GAYARD",
+        "GTGCAN",
+        "NACLON",
+        "NADEPT",
         "NAFLAK",
         "NAHAND",
+        "NAIRON",
         "NALASR",
+        "NAMISL",
+        "NANRCT",
+        "NAPSIS",
         "NAPOWR",
         "NARADR",
         "NAREFN",
+        "NASAM",
         "NATECH",
         "NAWEAP",
     ]
@@ -270,16 +316,22 @@ def build_observed_action_type_name(
         return f"Order::{normalized_order_type}::{normalized_target_mode}"
 
     if raw_action_name == "UpdateQueueAction":
-        normalized_queue_update_type = normalize_action_type_component(queue_update_type_name, "UnknownQueueUpdate")
-        normalized_item_name = normalize_action_type_component(item_name, "UnknownItem")
+        normalized_queue_update_type = normalize_action_type_component(
+            queue_update_type_name,
+            UNKNOWN_QUEUE_UPDATE_TYPE_NAME,
+        )
+        normalized_item_name = normalize_action_type_component(item_name, UNKNOWN_QUEUE_ITEM_NAME)
         return f"Queue::{normalized_queue_update_type}::{normalized_item_name}"
 
     if raw_action_name == "PlaceBuildingAction":
-        normalized_building_name = normalize_action_type_component(building_name, "UnknownBuilding")
+        normalized_building_name = normalize_action_type_component(building_name, UNKNOWN_BUILDING_NAME)
         return f"PlaceBuilding::{normalized_building_name}"
 
     if raw_action_name == "ActivateSuperWeaponAction":
-        normalized_super_weapon_name = normalize_action_type_component(super_weapon_name, "UnknownSuperWeapon")
+        normalized_super_weapon_name = normalize_action_type_component(
+            super_weapon_name,
+            UNKNOWN_SUPER_WEAPON_NAME,
+        )
         return f"ActivateSuperWeapon::{normalized_super_weapon_name}"
 
     if raw_action_name == "SellObjectAction":
@@ -316,6 +368,9 @@ def canonicalize_action_type_name(action_type_name: str | None) -> str:
             fallback_name = f"Queue::{parts[1]}::{UNKNOWN_QUEUE_ITEM_NAME}"
             if fallback_name in ACTION_TYPE_NAME_TO_ID:
                 return fallback_name
+        fallback_name = f"Queue::{UNKNOWN_QUEUE_UPDATE_TYPE_NAME}::{UNKNOWN_QUEUE_ITEM_NAME}"
+        if fallback_name in ACTION_TYPE_NAME_TO_ID:
+            return fallback_name
 
     if action_type_name.startswith("PlaceBuilding::"):
         fallback_name = f"PlaceBuilding::{UNKNOWN_BUILDING_NAME}"

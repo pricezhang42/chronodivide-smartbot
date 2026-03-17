@@ -221,7 +221,15 @@ function resolveGameObject(gameApi, objectId) {
     };
   }
 
-  const obj = gameApi.getUnitData(objectId) ?? gameApi.getGameObjectData(objectId);
+  let obj = null;
+  try {
+    obj = gameApi.getUnitData(objectId);
+  } catch (error) {
+    obj = null;
+  }
+  if (!obj) {
+    obj = gameApi.getGameObjectData(objectId);
+  }
   if (!obj) {
     return {
       objectId,
@@ -462,4 +470,3 @@ export function decodeActionLabel(
 
   return label;
 }
-

@@ -1,0 +1,1009 @@
+{
+  "createdAt": "2026-03-17T23:20:38.034406+00:00",
+  "manifestPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\static_action_dict_v4_smoke_20260317\\manifest.json",
+  "inputConfig": {
+    "replay_dir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50",
+    "output_dir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\static_action_dict_v4_smoke_20260317",
+    "data_dir": "D:\\workspace\\ra2-headless-mix",
+    "py_chronodivide_script": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\py-chronodivide\\extract_sl_tensors.mjs",
+    "replay_glob": "*.rpl",
+    "replay_start": 0,
+    "max_replays": 1,
+    "player": "all",
+    "include_no_action": false,
+    "include_ui_actions": false,
+    "action_filter_profile": "mas",
+    "filter_seed": 0,
+    "no_action_keep_prob": 0.0,
+    "select_units_keep_prob": 0.2,
+    "move_order_keep_prob": 0.1,
+    "gather_order_keep_prob": 0.1,
+    "attack_order_keep_prob": 0.5,
+    "max_actions": 64,
+    "max_tick": null,
+    "max_entities": 128,
+    "max_selected_units": 64,
+    "spatial_size": 32,
+    "minimap_size": 64,
+    "overwrite": false,
+    "fail_fast": false
+  },
+  "staticActionDictVersion": "ra2_sl_v4",
+  "replayCount": 1,
+  "savedShardCount": 2,
+  "trainingTargetShardCount": 2,
+  "auditedShardCount": 2,
+  "totalSampleCount": 31,
+  "issueCount": 0,
+  "aggregateActionTypeCounts": [
+    {
+      "actionType": "Order::DeploySelected::none",
+      "count": 3
+    },
+    {
+      "actionType": "Queue::Add::ADOG",
+      "count": 3
+    },
+    {
+      "actionType": "Queue::Add::GAPILL",
+      "count": 2
+    },
+    {
+      "actionType": "Queue::Add::NAPOWR",
+      "count": 2
+    },
+    {
+      "actionType": "Queue::Add::DOG",
+      "count": 2
+    },
+    {
+      "actionType": "SelectUnits",
+      "count": 2
+    },
+    {
+      "actionType": "Order::AttackMove::tile",
+      "count": 2
+    },
+    {
+      "actionType": "Queue::Add::GAPOWR",
+      "count": 1
+    },
+    {
+      "actionType": "PlaceBuilding::GAPOWR",
+      "count": 1
+    },
+    {
+      "actionType": "Queue::Add::GAPILE",
+      "count": 1
+    },
+    {
+      "actionType": "PlaceBuilding::GAPILE",
+      "count": 1
+    },
+    {
+      "actionType": "Queue::Add::GAREFN",
+      "count": 1
+    },
+    {
+      "actionType": "Queue::Add::ENGINEER",
+      "count": 1
+    },
+    {
+      "actionType": "PlaceBuilding::GAPILL",
+      "count": 1
+    },
+    {
+      "actionType": "Order::Deploy::object",
+      "count": 1
+    },
+    {
+      "actionType": "PlaceBuilding::NAPOWR",
+      "count": 1
+    },
+    {
+      "actionType": "Queue::Add::NAHAND",
+      "count": 1
+    },
+    {
+      "actionType": "PlaceBuilding::NAHAND",
+      "count": 1
+    },
+    {
+      "actionType": "Queue::Add::NAREFN",
+      "count": 1
+    },
+    {
+      "actionType": "Queue::Add::SENGINEER",
+      "count": 1
+    },
+    {
+      "actionType": "Order::Capture::object",
+      "count": 1
+    },
+    {
+      "actionType": "Queue::Add::NALASR",
+      "count": 1
+    }
+  ],
+  "aggregateActionFamilyCounts": [
+    {
+      "actionFamily": "update_queue",
+      "count": 17
+    },
+    {
+      "actionFamily": "order_units",
+      "count": 7
+    },
+    {
+      "actionFamily": "place_building",
+      "count": 5
+    },
+    {
+      "actionFamily": "select_units",
+      "count": 2
+    }
+  ],
+  "aggregateDelayBinCounts": [
+    {
+      "delayBin": 127,
+      "count": 9
+    },
+    {
+      "delayBin": 6,
+      "count": 3
+    },
+    {
+      "delayBin": 51,
+      "count": 3
+    },
+    {
+      "delayBin": 12,
+      "count": 2
+    },
+    {
+      "delayBin": 21,
+      "count": 2
+    },
+    {
+      "delayBin": 36,
+      "count": 2
+    },
+    {
+      "delayBin": 9,
+      "count": 1
+    },
+    {
+      "delayBin": 18,
+      "count": 1
+    },
+    {
+      "delayBin": 39,
+      "count": 1
+    },
+    {
+      "delayBin": 42,
+      "count": 1
+    },
+    {
+      "delayBin": 54,
+      "count": 1
+    },
+    {
+      "delayBin": 57,
+      "count": 1
+    },
+    {
+      "delayBin": 72,
+      "count": 1
+    },
+    {
+      "delayBin": 90,
+      "count": 1
+    }
+  ],
+  "aggregateQueueValueCounts": [
+    {
+      "queueValue": 0,
+      "count": 7
+    }
+  ],
+  "aggregateQuantityValueCounts": [
+    {
+      "quantity": 1,
+      "count": 17
+    }
+  ],
+  "shards": [
+    {
+      "shard": "00758dde-b725-4442-ae8f-a657069251a0__bikerush.pt",
+      "replay": {
+        "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl",
+        "gameId": "00758dde-b725-4442-ae8f-a657069251a0",
+        "mapName": "2_pinch_point_le.map",
+        "endTick": 35251,
+        "players": [
+          {
+            "name": "mecharse",
+            "countryId": 6,
+            "colorId": 4,
+            "startPos": -2,
+            "teamId": -2
+          },
+          {
+            "name": "bikerush",
+            "countryId": 0,
+            "colorId": 1,
+            "startPos": -2,
+            "teamId": -2
+          }
+        ]
+      },
+      "playerName": "bikerush",
+      "sampleCount": 15,
+      "issueCount": 0,
+      "issues": [],
+      "semanticMaskSummary": {
+        "queueSemanticCount": 3,
+        "unitsSemanticCount": 3,
+        "targetEntitySemanticCount": 0,
+        "targetLocationSemanticCount": 3,
+        "targetLocation2SemanticCount": 0,
+        "quantitySemanticCount": 9
+      },
+      "lossMaskSummary": {
+        "actionTypeLossCount": 15,
+        "delayLossCount": 14,
+        "queueLossCount": 3,
+        "unitsLossPositionCount": 3,
+        "targetEntityLossCount": 0,
+        "targetLocationLossCount": 3,
+        "targetLocation2LossCount": 0,
+        "quantityLossCount": 9
+      },
+      "actionTypeCounts": [
+        {
+          "actionType": "Order::DeploySelected::none",
+          "count": 3
+        },
+        {
+          "actionType": "Queue::Add::ADOG",
+          "count": 3
+        },
+        {
+          "actionType": "Queue::Add::GAPILL",
+          "count": 2
+        },
+        {
+          "actionType": "Queue::Add::GAPOWR",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::GAPOWR",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::GAPILE",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::GAPILE",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::GAREFN",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::ENGINEER",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::GAPILL",
+          "count": 1
+        }
+      ],
+      "actionFamilyCounts": [
+        {
+          "actionFamily": "update_queue",
+          "count": 9
+        },
+        {
+          "actionFamily": "order_units",
+          "count": 3
+        },
+        {
+          "actionFamily": "place_building",
+          "count": 3
+        }
+      ],
+      "delayBinCounts": [
+        {
+          "delayBin": 127,
+          "count": 4
+        },
+        {
+          "delayBin": 12,
+          "count": 2
+        },
+        {
+          "delayBin": 36,
+          "count": 2
+        },
+        {
+          "delayBin": 9,
+          "count": 1
+        },
+        {
+          "delayBin": 18,
+          "count": 1
+        },
+        {
+          "delayBin": 21,
+          "count": 1
+        },
+        {
+          "delayBin": 39,
+          "count": 1
+        },
+        {
+          "delayBin": 42,
+          "count": 1
+        },
+        {
+          "delayBin": 90,
+          "count": 1
+        }
+      ],
+      "queueValueCounts": [
+        {
+          "queueValue": 0,
+          "count": 3
+        }
+      ],
+      "quantityValueCounts": [
+        {
+          "quantity": 1,
+          "count": 9
+        }
+      ],
+      "selectedUnitsCount": [
+        {
+          "selectedUnits": 1,
+          "count": 3
+        }
+      ],
+      "selectedUnitsLossPositions": [
+        {
+          "selectedUnitsWithLoss": 1,
+          "count": 3
+        }
+      ],
+      "targetEntityByAction": [],
+      "targetLocationByAction": [
+        {
+          "actionType": "PlaceBuilding::GAPOWR",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::GAPILE",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::GAPILL",
+          "count": 1
+        }
+      ],
+      "targetLocation2ByAction": [],
+      "quantityByAction": [
+        {
+          "actionType": "Queue::Add::ADOG",
+          "count": 3
+        },
+        {
+          "actionType": "Queue::Add::GAPILL",
+          "count": 2
+        },
+        {
+          "actionType": "Queue::Add::GAPOWR",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::GAPILE",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::GAREFN",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::ENGINEER",
+          "count": 1
+        }
+      ],
+      "perActionHeadSummary": [
+        {
+          "actionType": "Order::DeploySelected::none",
+          "sampleCount": 3,
+          "queueSemanticCount": 3,
+          "queueLossCount": 3,
+          "unitsSemanticCount": 3,
+          "unitsLossPositions": 3,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "Queue::Add::ADOG",
+          "sampleCount": 3,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 3,
+          "quantityLossCount": 3
+        },
+        {
+          "actionType": "Queue::Add::GAPILL",
+          "sampleCount": 2,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 2,
+          "quantityLossCount": 2
+        },
+        {
+          "actionType": "PlaceBuilding::GAPILE",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 1,
+          "targetLocationLossCount": 1,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "PlaceBuilding::GAPILL",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 1,
+          "targetLocationLossCount": 1,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "PlaceBuilding::GAPOWR",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 1,
+          "targetLocationLossCount": 1,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "Queue::Add::ENGINEER",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        },
+        {
+          "actionType": "Queue::Add::GAPILE",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        },
+        {
+          "actionType": "Queue::Add::GAPOWR",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        },
+        {
+          "actionType": "Queue::Add::GAREFN",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        }
+      ]
+    },
+    {
+      "shard": "00758dde-b725-4442-ae8f-a657069251a0__mecharse.pt",
+      "replay": {
+        "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl",
+        "gameId": "00758dde-b725-4442-ae8f-a657069251a0",
+        "mapName": "2_pinch_point_le.map",
+        "endTick": 35251,
+        "players": [
+          {
+            "name": "mecharse",
+            "countryId": 6,
+            "colorId": 4,
+            "startPos": -2,
+            "teamId": -2
+          },
+          {
+            "name": "bikerush",
+            "countryId": 0,
+            "colorId": 1,
+            "startPos": -2,
+            "teamId": -2
+          }
+        ]
+      },
+      "playerName": "mecharse",
+      "sampleCount": 16,
+      "issueCount": 0,
+      "issues": [],
+      "semanticMaskSummary": {
+        "queueSemanticCount": 4,
+        "unitsSemanticCount": 6,
+        "targetEntitySemanticCount": 2,
+        "targetLocationSemanticCount": 4,
+        "targetLocation2SemanticCount": 0,
+        "quantitySemanticCount": 8
+      },
+      "lossMaskSummary": {
+        "actionTypeLossCount": 16,
+        "delayLossCount": 15,
+        "queueLossCount": 4,
+        "unitsLossPositionCount": 4,
+        "targetEntityLossCount": 2,
+        "targetLocationLossCount": 4,
+        "targetLocation2LossCount": 0,
+        "quantityLossCount": 8
+      },
+      "actionTypeCounts": [
+        {
+          "actionType": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "actionType": "Queue::Add::DOG",
+          "count": 2
+        },
+        {
+          "actionType": "SelectUnits",
+          "count": 2
+        },
+        {
+          "actionType": "Order::AttackMove::tile",
+          "count": 2
+        },
+        {
+          "actionType": "Order::Deploy::object",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::NAPOWR",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::NAHAND",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::NAHAND",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::NAREFN",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::SENGINEER",
+          "count": 1
+        },
+        {
+          "actionType": "Order::Capture::object",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::NALASR",
+          "count": 1
+        }
+      ],
+      "actionFamilyCounts": [
+        {
+          "actionFamily": "update_queue",
+          "count": 8
+        },
+        {
+          "actionFamily": "order_units",
+          "count": 4
+        },
+        {
+          "actionFamily": "place_building",
+          "count": 2
+        },
+        {
+          "actionFamily": "select_units",
+          "count": 2
+        }
+      ],
+      "delayBinCounts": [
+        {
+          "delayBin": 127,
+          "count": 5
+        },
+        {
+          "delayBin": 6,
+          "count": 3
+        },
+        {
+          "delayBin": 51,
+          "count": 3
+        },
+        {
+          "delayBin": 21,
+          "count": 1
+        },
+        {
+          "delayBin": 54,
+          "count": 1
+        },
+        {
+          "delayBin": 57,
+          "count": 1
+        },
+        {
+          "delayBin": 72,
+          "count": 1
+        }
+      ],
+      "queueValueCounts": [
+        {
+          "queueValue": 0,
+          "count": 4
+        }
+      ],
+      "quantityValueCounts": [
+        {
+          "quantity": 1,
+          "count": 8
+        }
+      ],
+      "selectedUnitsCount": [
+        {
+          "selectedUnits": 1,
+          "count": 4
+        },
+        {
+          "selectedUnits": 0,
+          "count": 2
+        }
+      ],
+      "selectedUnitsLossPositions": [
+        {
+          "selectedUnitsWithLoss": 1,
+          "count": 4
+        },
+        {
+          "selectedUnitsWithLoss": 0,
+          "count": 2
+        }
+      ],
+      "targetEntityByAction": [
+        {
+          "actionType": "Order::Deploy::object",
+          "count": 1
+        },
+        {
+          "actionType": "Order::Capture::object",
+          "count": 1
+        }
+      ],
+      "targetLocationByAction": [
+        {
+          "actionType": "Order::AttackMove::tile",
+          "count": 2
+        },
+        {
+          "actionType": "PlaceBuilding::NAPOWR",
+          "count": 1
+        },
+        {
+          "actionType": "PlaceBuilding::NAHAND",
+          "count": 1
+        }
+      ],
+      "targetLocation2ByAction": [],
+      "quantityByAction": [
+        {
+          "actionType": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "actionType": "Queue::Add::DOG",
+          "count": 2
+        },
+        {
+          "actionType": "Queue::Add::NAHAND",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::NAREFN",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::SENGINEER",
+          "count": 1
+        },
+        {
+          "actionType": "Queue::Add::NALASR",
+          "count": 1
+        }
+      ],
+      "perActionHeadSummary": [
+        {
+          "actionType": "Order::AttackMove::tile",
+          "sampleCount": 2,
+          "queueSemanticCount": 2,
+          "queueLossCount": 2,
+          "unitsSemanticCount": 2,
+          "unitsLossPositions": 2,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 2,
+          "targetLocationLossCount": 2,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "Queue::Add::DOG",
+          "sampleCount": 2,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 2,
+          "quantityLossCount": 2
+        },
+        {
+          "actionType": "Queue::Add::NAPOWR",
+          "sampleCount": 2,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 2,
+          "quantityLossCount": 2
+        },
+        {
+          "actionType": "SelectUnits",
+          "sampleCount": 2,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 2,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "Order::Capture::object",
+          "sampleCount": 1,
+          "queueSemanticCount": 1,
+          "queueLossCount": 1,
+          "unitsSemanticCount": 1,
+          "unitsLossPositions": 1,
+          "targetEntitySemanticCount": 1,
+          "targetEntityLossCount": 1,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "Order::Deploy::object",
+          "sampleCount": 1,
+          "queueSemanticCount": 1,
+          "queueLossCount": 1,
+          "unitsSemanticCount": 1,
+          "unitsLossPositions": 1,
+          "targetEntitySemanticCount": 1,
+          "targetEntityLossCount": 1,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "PlaceBuilding::NAHAND",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 1,
+          "targetLocationLossCount": 1,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "PlaceBuilding::NAPOWR",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 1,
+          "targetLocationLossCount": 1,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 0,
+          "quantityLossCount": 0
+        },
+        {
+          "actionType": "Queue::Add::NAHAND",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        },
+        {
+          "actionType": "Queue::Add::NALASR",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        },
+        {
+          "actionType": "Queue::Add::NAREFN",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        },
+        {
+          "actionType": "Queue::Add::SENGINEER",
+          "sampleCount": 1,
+          "queueSemanticCount": 0,
+          "queueLossCount": 0,
+          "unitsSemanticCount": 0,
+          "unitsLossPositions": 0,
+          "targetEntitySemanticCount": 0,
+          "targetEntityLossCount": 0,
+          "targetLocationSemanticCount": 0,
+          "targetLocationLossCount": 0,
+          "targetLocation2SemanticCount": 0,
+          "targetLocation2LossCount": 0,
+          "quantitySemanticCount": 1,
+          "quantityLossCount": 1
+        }
+      ]
+    }
+  ]
+}

@@ -151,7 +151,18 @@ def run_action_label_extract(config: AuditConfig, replay_path: Path) -> dict[str
         temp_output_path = Path(handle.name)
     command = build_node_command(config, replay_path, temp_output_path)
     try:
-        subprocess.run(command, check=True, cwd=str(PACKAGE_ROOT))
+        completed = subprocess.run(
+            command,
+            check=False,
+            cwd=str(PACKAGE_ROOT),
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0:
+            stderr_text = (completed.stderr or "").strip()
+            stdout_text = (completed.stdout or "").strip()
+            details = stderr_text or stdout_text or f"Action-label extractor exited with status {completed.returncode}."
+            raise RuntimeError(details)
         with temp_output_path.open("r", encoding="utf-8") as handle:
             return json.load(handle)
     finally:
