@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-03-17T06:14:24.598Z",
+  "root": "d:/workspace/supalosa-chronodivide-bot/packages/py-chronodivide/generated_recordings/2026-03-17_validation",
+  "summaries": [
+    {
+      "file": "00758dde_2_pinch_point_le_global_recording.json",
+      "sizeBytes": 77471412,
+      "mapName": "2_pinch_point_le.map",
+      "sampledPlayer": "mecharse",
+      "endTick": 35251,
+      "stoppedTick": 35251,
+      "playbackReachedEnd": true,
+      "sampleCount": 71,
+      "firstSampleTick": 500,
+      "lastSampleTick": 35251,
+      "staticDataPresent": true,
+      "staticCapturedTick": 0,
+      "mapDumpTileCount": 9043,
+      "mapDumpTerrainObjectCount": 1294,
+      "mapDumpNeutralObjectCount": 25,
+      "playerStatsAtStopCount": 2,
+      "lastSamplePlayerCount": 2,
+      "lastSampleUnitCount": 165,
+      "lastSampleHasObservation": true,
+      "validations": {
+        "reachedEndMatchesEndTick": true,
+        "staticCapturedAtTickZero": true,
+        "hasMapDump": true,
+        "hasSamples": true,
+        "finalSampleAtReplayEnd": true,
+        "hasStopPlayerStats": true
+      },
+      "allValid": true
+    },
+    {
+      "file": "00ceb8d5_4_caverns_v410_global_recording.json",
+      "sizeBytes": 21105740,
+      "mapName": "4_caverns_v410.map",
+      "sampledPlayer": "Dogoz",
+      "endTick": 10108,
+      "stoppedTick": 10108,
+      "playbackReachedEnd": true,
+      "sampleCount": 21,
+      "firstSampleTick": 500,
+      "lastSampleTick": 10108,
+      "staticDataPresent": true,
+      "staticCapturedTick": 0,
+      "mapDumpTileCount": 17187,
+      "mapDumpTerrainObjectCount": 572,
+      "mapDumpNeutralObjectCount": 4,
+      "playerStatsAtStopCount": 2,
+      "lastSamplePlayerCount": 2,
+      "lastSampleUnitCount": 22,
+      "lastSampleHasObservation": true,
+      "validations": {
+        "reachedEndMatchesEndTick": true,
+        "staticCapturedAtTickZero": true,
+        "hasMapDump": true,
+        "hasSamples": true,
+        "finalSampleAtReplayEnd": true,
+        "hasStopPlayerStats": true
+      },
+      "allValid": true
+    }
+  ]
+}
