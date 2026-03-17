@@ -1273,8 +1273,6 @@ def build_node_command(config: TransformConfig, replay_path: Path, output_path: 
         str(config.spatial_size),
         "--minimap-size",
         str(config.minimap_size),
-        "--include-flat",
-        "true",
         "--output",
         str(output_path),
     ]

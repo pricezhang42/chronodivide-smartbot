@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { once } from "node:events";
 import path from "node:path";
 
 import { parseArgs, parseIntegerArg, requireArg } from "./cli_args.mjs";
@@ -24,6 +25,58 @@ function usage() {
     "Extracts an action-aligned supervised-learning tensor dataset from a replay.",
     "The output is JSON with fixed-shape numeric tensor blocks plus schema metadata.",
   ].join("\n");
+}
+
+async function writeChunk(stream, chunk) {
+  if (!stream.write(chunk)) {
+    await once(stream, "drain");
+  }
+}
+
+async function endStream(stream) {
+  stream.end();
+  await once(stream, "finish");
+}
+
+async function writeDatasetJson(outputPath, result) {
+  const stream = fs.createWriteStream(path.resolve(outputPath), { encoding: "utf-8" });
+  stream.on("error", (error) => {
+    throw error;
+  });
+
+  try {
+    await writeChunk(stream, "{");
+    const topLevelEntries = [
+      ["replay", result.replay],
+      ["sampledPlayers", result.sampledPlayers],
+      ["options", result.options],
+      ["schema", result.schema],
+      ["counts", result.counts],
+    ];
+
+    for (let index = 0; index < topLevelEntries.length; index += 1) {
+      const [key, value] = topLevelEntries[index];
+      if (index > 0) {
+        await writeChunk(stream, ",");
+      }
+      await writeChunk(stream, JSON.stringify(key));
+      await writeChunk(stream, ":");
+      await writeChunk(stream, JSON.stringify(value));
+    }
+
+    await writeChunk(stream, ',\"samples\":[');
+    for (let index = 0; index < result.samples.length; index += 1) {
+      if (index > 0) {
+        await writeChunk(stream, ",");
+      }
+      await writeChunk(stream, JSON.stringify(result.samples[index]));
+    }
+    await writeChunk(stream, "]}");
+    await endStream(stream);
+  } catch (error) {
+    stream.destroy();
+    throw error;
+  }
 }
 
 async function main() {
@@ -64,11 +117,10 @@ async function main() {
     includeDebug,
   });
 
-  const serialized = JSON.stringify(result, null, 2);
   if (outputPath) {
-    fs.writeFileSync(path.resolve(outputPath), serialized);
+    await writeDatasetJson(outputPath, result);
   } else {
-    console.log(serialized);
+    console.log(JSON.stringify(result));
   }
 }
 
