@@ -7,6 +7,9 @@ node_modules/
 replays/
 packages/chronodivide-bot-driver/debug/
 packages/chronodivide-bot-launcher/
+packages/chronodivide-bot-sl/generated_tensors
+packages/chronodivide-bot-sl/ladder_replays_top50
+packages/chronodivide-bot-sl/__pycache__
 *.tgz
 *.rpl
 *.log

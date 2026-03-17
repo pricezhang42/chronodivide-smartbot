@@ -10,7 +10,7 @@ package.
 
 Current behavior:
 - iterate replay files
-- call `py-chronodivide/extract_sl_tensors.mjs` with flat tensors enabled
+- call `py-chronodivide/extract_sl_tensors.mjs`
 - group samples by player perspective
 - derive static-dict-backed RA2 SL V1 action-type metadata
 - apply mAS-style action filtering/downsampling on the action-aligned sample stream
@@ -70,6 +70,30 @@ DEFAULT_DATA_DIR = Path(os.environ.get("CHRONODIVIDE_DATA_DIR", "d:/workspace/ra
 LABEL_LAYOUT_V1_VERSION = "v1"
 LABEL_LAYOUT_V1_DELAY_BINS = 128
 LABEL_LAYOUT_V1_MISSING_INT = -1
+LABEL_LAYOUT_V1_QUANTITY_POLICY = {
+    "canonicalStorage": "raw_integer",
+    "missingValue": LABEL_LAYOUT_V1_MISSING_INT,
+    "derivedTrainingTarget": "quantityValue int32",
+    "bucketing": "not used in V1",
+    "notes": [
+        "Canonical V1 stores replay quantity as-is when used and -1 when unused.",
+        "Any quantity bucketing is deferred to a later label version or model-specific derived target.",
+    ],
+}
+LABEL_LAYOUT_V1_SUPERVISION_POLICY = {
+    "semanticMaskMeaning": "whether a head is conceptually used by the action type",
+    "resolutionMaskMeaning": "whether replay-time alignment produced a valid supervision target",
+    "queue": "supervise only when the action type uses queue and queue is in {0,1}",
+    "units": "supervise only positions where the action type uses units, unitsMask=1, and unitsResolvedMask=1",
+    "targetEntity": "supervise only when the action type uses target_entity and targetEntityResolved=1",
+    "targetLocation": "supervise when the action type uses target_location and targetLocationValid=1",
+    "targetLocation2": "supervise when the action type uses target_location_2 and targetLocation2Valid=1",
+    "quantity": "supervise only when the action type uses quantity and quantity >= 0",
+    "notes": [
+        "Entity-resolution failure suppresses target-entity supervision but does not suppress valid location supervision.",
+        "Units are supervised position-by-position; unresolved selected units do not contribute loss.",
+    ],
+}
 LABEL_LAYOUT_V1_ACTION_VOCAB_SCOPE = "per_replay_extract"
 LABEL_LAYOUT_V1_CORE_LABEL_SECTIONS = [
     "actionTypeId",
@@ -657,6 +681,8 @@ def build_label_layout_v1_metadata(samples: list[dict[str, Any]], dataset: dict[
         "mainTensorUsesV1Only": False,
         "delayBins": LABEL_LAYOUT_V1_DELAY_BINS,
         "missingInt": LABEL_LAYOUT_V1_MISSING_INT,
+        "quantityPolicy": LABEL_LAYOUT_V1_QUANTITY_POLICY,
+        "supervisionPolicy": LABEL_LAYOUT_V1_SUPERVISION_POLICY,
         "coreLabelSections": LABEL_LAYOUT_V1_CORE_LABEL_SECTIONS,
         "staticActionDictVersion": STATIC_ACTION_DICT_VERSION,
         "actionTypeVocabulary": action_type_vocabulary,
@@ -668,6 +694,8 @@ def build_label_layout_v1_metadata(samples: list[dict[str, Any]], dataset: dict[
         "notes": [
             "ActionTypeId is assigned from the static chronodivide-bot-sl action dict, not replay order.",
             "Unknown concrete queue items, buildings, or super-weapon names fall back to explicit <unk> action buckets.",
+            "Quantity stays raw integer-valued in canonical V1; bucketing is explicitly deferred.",
+            "Training supervision combines semantic masks from action type with replay-time resolution/validity masks.",
             "Legacy coarse label sections are still preserved during the migration period.",
         ],
     }
@@ -687,6 +715,8 @@ def augment_dataset_with_label_layout_v1(dataset: dict[str, Any]) -> None:
             "mainTensorUsesV1Only": True,
             "delayBins": LABEL_LAYOUT_V1_DELAY_BINS,
             "missingInt": LABEL_LAYOUT_V1_MISSING_INT,
+            "quantityPolicy": LABEL_LAYOUT_V1_QUANTITY_POLICY,
+            "supervisionPolicy": LABEL_LAYOUT_V1_SUPERVISION_POLICY,
             "coreLabelSections": LABEL_LAYOUT_V1_CORE_LABEL_SECTIONS,
             "staticActionDictVersion": STATIC_ACTION_DICT_VERSION,
             "actionTypeVocabulary": [
@@ -1050,6 +1080,8 @@ def build_training_targets_v1(
         "maxEntities": max_entities,
         "maxSelectedUnits": max_selected_units,
         "spatialSize": spatial_size,
+        "quantityPolicy": LABEL_LAYOUT_V1_QUANTITY_POLICY,
+        "supervisionPolicy": LABEL_LAYOUT_V1_SUPERVISION_POLICY,
         **build_training_target_sections(
             action_vocab_size=action_vocab_size,
             delay_bins=delay_bins,
@@ -1061,6 +1093,8 @@ def build_training_targets_v1(
             "This sidecar expands compact canonical V1 labels into model-ready targets and masks.",
             "Action-type one-hot uses the run-global action vocabulary from the transform manifest.",
             "Spatial one-hot targets reuse the same tile-to-grid mapping as py-chronodivide features.",
+            "Quantity stays raw integer-valued in V1 and is supervised directly through quantityValue.",
+            "Loss masks are the hard supervision policy: semantic masks gate head applicability and replay-time masks gate target validity.",
             "Canonical labels remain the source of truth; these tensors are derived for training convenience.",
         ],
     }

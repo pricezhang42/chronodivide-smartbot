@@ -71,16 +71,20 @@ It does not include:
   - `MAX_SELECTED_UNITS = 64`
   - unresolved integer sentinel `-1`
 
-- `[ ]` Decide whether `quantity` stays raw integer-valued in V1 or gets clipped into a fixed bucket count.
-  Recommended first pass: keep it as integer-valued canonical storage and bucket later only if needed.
+- `[x]` Freeze the V1 `quantity` policy.
+  Hard policy:
+  - canonical V1 stores replay quantity as raw integer when used
+  - canonical V1 stores `-1` when quantity is unused
+  - derived V1 training targets keep `quantityValue` as raw integer
+  - quantity bucketing is explicitly deferred to a later label version or model-specific head
 
 ## Phase 2: Keep `py-chronodivide` Generic
 
 - `[x]` Keep generic replay decoding in `py-chronodivide`.
-- `[ ]` Confirm that no fine-grained `action_type` id mapping is pushed down into `py-chronodivide`.
-  `py-chronodivide` should keep emitting generic decoded fields, not project-specific action vocab ids.
+- `[x]` Confirm that no fine-grained `action_type` id mapping is pushed down into `py-chronodivide`.
+  Current implementation keeps `py-chronodivide` generic and assigns fine-grained action ids only in `chronodivide-bot-sl/action_dict.py`.
 
-- `[ ]` Confirm the following fields are reliably present in the extracted raw samples from `py-chronodivide`:
+- `[x]` Confirm the following fields are reliably present in the extracted raw samples from `py-chronodivide`:
   - `rawActionId`
   - `delayToNextAction`
   - `queue`
@@ -100,7 +104,8 @@ It does not include:
   - `superWeaponTile`
   - `superWeaponTile2`
 
-- `[ ]` If any of the above are missing or unstable on edge cases, patch `py-chronodivide` first and keep the fix generic.
+- `[x]` If any of the above are missing or unstable on edge cases, patch `py-chronodivide` first and keep the fix generic.
+  Current implementation already patched generic decoder edge cases such as non-Techno object resolution in `labels.mjs`.
 
 ## Phase 3: Build The Fine-Grained `action_type` Vocabulary
 
@@ -136,6 +141,14 @@ It does not include:
 
 - `[x]` Make `actionTypeId` stable across a transform run.
   Current implementation assigns ids from the static `chronodivide-bot-sl/action_dict.py` vocabulary and writes counts to the run manifest.
+
+- `[x]` Add an explicit static action-dict coverage audit step.
+  Validate:
+  - fallback / unknown action-type rate on a replay slice
+  - top fallback observed action names
+  - whether misses are due to unseen queue items, buildings, or queue-update variants
+  Current implementation uses `audit_action_dict.py`, and the latest validated wide-slice report is
+  `action_dict_audit_100_v4_20260317.json` with `0` fallback actions on processable replays.
 
 ## Phase 4: Replace The Current Canonical Label Sections
 
@@ -239,14 +252,20 @@ It does not include:
   - `targetLocationValid`
   - `targetLocation2Valid`
 
-- `[ ]` Document and enforce the intended training behavior:
-  - semantic mask says whether the head matters for this action
-  - resolution mask says whether the label could actually be supervised from the current tensor alignment
+- `[x]` Document and enforce the intended training behavior.
+  Hard policy:
+  - semantic mask says whether the head matters for this action type
+  - resolution / validity mask says whether replay-time alignment produced a usable supervision target
+  - loss supervision requires both semantic applicability and replay-time validity
+  Current implementation enforces this in the derived training-mask formulas in `transform_replay_data.py`.
 
-- `[ ]` Decide the exact supervision policy for unresolved targets.
-  Recommendation:
+- `[x]` Decide the exact supervision policy for unresolved targets.
+  Hard policy:
   - do not backpropagate `target_entity` when unresolved
-  - still allow `target_location` supervision when a location exists
+  - do not backpropagate unresolved selected-unit positions
+  - still allow `target_location` supervision when a valid location exists
+  - still allow `target_location_2` supervision when a valid second location exists
+  - supervise `quantity` only when semantic mask is active and quantity is non-negative
 
 ## Phase 8: Update Flat Label Ordering And Schema Metadata
 

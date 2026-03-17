@@ -211,6 +211,7 @@ Assumptions:
   - shape: `[1]`
   - dtype: `int32`
   - meaning: queue update quantity, `-1` when unused
+  - hard V1 policy: store replay quantity as raw integer; do not bucket in canonical V1
 
 ## Derived Training Targets
 
@@ -254,7 +255,8 @@ The canonical stored labels above are compact. For training, they can be expande
 
 - `quantity`
   - derived from `quantity`
-  - can remain integer-valued or be bucketed if the observed range grows
+  - hard V1 policy: remains integer-valued as `quantityValue`
+  - any bucketing is deferred to a later label version or model-specific derived head
 
 ## Action-Type-Driven Masking
 
@@ -394,6 +396,50 @@ Training should usually require both:
 
 - semantic head is active
 - target resolved or valid
+
+## Hard V1 Supervision Policy
+
+These are fixed V1 rules, not open design questions.
+
+### Quantity
+
+- canonical `quantity` stores the replay quantity as raw integer
+- canonical `quantity` stores `-1` when unused
+- derived training target keeps raw integer `quantityValue`
+- V1 does not bucket quantity
+- if quantity bucketing is later needed, that should happen in a new label version or a model-specific derived target layer
+
+### Unresolved target and unit supervision
+
+- `queue`
+  - supervise only when the action type semantically uses queue and queue is in `{0, 1}`
+- `units`
+  - supervise only positions where:
+    - the action type semantically uses units
+    - `unitsMask == 1`
+    - `unitsResolvedMask == 1`
+- `target_entity`
+  - supervise only when:
+    - the action type semantically uses `target_entity`
+    - `targetEntityResolved == 1`
+- `target_location`
+  - supervise when:
+    - the action type semantically uses `target_location`
+    - `targetLocationValid == 1`
+  - entity-resolution failure does not suppress valid location supervision
+- `target_location_2`
+  - supervise when:
+    - the action type semantically uses `target_location_2`
+    - `targetLocation2Valid == 1`
+- `quantity`
+  - supervise only when:
+    - the action type semantically uses `quantity`
+    - `quantity >= 0`
+
+This is the hard V1 rule for training masks:
+
+- semantic masks decide whether a head conceptually applies to the action type
+- replay-time resolution / validity masks decide whether that head can actually receive supervision on this sample
 
 ## Current RA2-to-Head Mapping
 
