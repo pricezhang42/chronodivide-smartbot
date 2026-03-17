@@ -1,0 +1,1901 @@
+{
+  "createdAt": "2026-03-17T21:40:35.854209+00:00",
+  "replay": {
+    "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl",
+    "gameId": "00758dde-b725-4442-ae8f-a657069251a0",
+    "mapName": "2_pinch_point_le.map",
+    "endTick": 35251,
+    "players": [
+      {
+        "name": "mecharse",
+        "countryId": 6,
+        "colorId": 4,
+        "startPos": -2,
+        "teamId": -2
+      },
+      {
+        "name": "bikerush",
+        "countryId": 0,
+        "colorId": 1,
+        "startPos": -2,
+        "teamId": -2
+      }
+    ]
+  },
+  "playerName": "bikerush",
+  "sampleCount": 10,
+  "featureShape": [
+    10,
+    99049
+  ],
+  "labelShape": [
+    10,
+    204
+  ],
+  "featureDType": "torch.float32",
+  "labelDType": "torch.int64",
+  "schema": {
+    "observation": {
+      "scalarFeatureNames": [
+        "tick",
+        "game_time",
+        "tick_rate",
+        "map_width",
+        "map_height",
+        "start_x",
+        "start_y",
+        "credits",
+        "power_total",
+        "power_drain",
+        "power_margin",
+        "power_low",
+        "radar_disabled",
+        "visible_tile_count",
+        "visible_tile_fraction",
+        "self_unit_count",
+        "self_building_count",
+        "self_mobile_count",
+        "self_infantry_count",
+        "self_vehicle_count",
+        "self_aircraft_count",
+        "allied_unit_count",
+        "enemy_unit_count",
+        "enemy_building_count",
+        "enemy_mobile_count",
+        "enemy_infantry_count",
+        "enemy_vehicle_count",
+        "enemy_aircraft_count",
+        "neutral_unit_count",
+        "other_hostile_unit_count",
+        "self_purchase_value_sum",
+        "enemy_visible_purchase_value_sum",
+        "self_hit_points_sum",
+        "enemy_visible_hit_points_sum"
+      ],
+      "entityFeatureNames": [
+        "relation_self",
+        "relation_allied",
+        "relation_enemy",
+        "relation_neutral",
+        "relation_other_hostile",
+        "object_aircraft",
+        "object_building",
+        "object_infantry",
+        "object_vehicle",
+        "object_other",
+        "tile_x",
+        "tile_y",
+        "tile_x_norm",
+        "tile_y_norm",
+        "hit_points",
+        "max_hit_points",
+        "hit_points_ratio",
+        "sight",
+        "veteran_level",
+        "purchase_value",
+        "direction_sin",
+        "direction_cos",
+        "turret_direction_sin",
+        "turret_direction_cos",
+        "velocity_x",
+        "velocity_z",
+        "foundation_width",
+        "foundation_height",
+        "is_idle",
+        "can_move",
+        "guard_mode",
+        "on_bridge",
+        "build_status_build_up",
+        "build_status_ready",
+        "build_status_build_down",
+        "attack_state_idle",
+        "attack_state_check_range",
+        "attack_state_prepare_to_fire",
+        "attack_state_fire_up",
+        "attack_state_firing",
+        "attack_state_just_fired",
+        "is_powered_on",
+        "has_wrench_repair",
+        "garrison_fill_ratio",
+        "passenger_fill_ratio",
+        "harvested_ore",
+        "harvested_gems",
+        "ammo",
+        "is_warped_out",
+        "tnt_timer"
+      ],
+      "spatialChannelNames": [
+        "visible_tiles",
+        "visible_ore",
+        "visible_gems",
+        "visible_ore_spawners",
+        "self_presence",
+        "allied_presence",
+        "enemy_presence",
+        "neutral_presence",
+        "other_hostile_presence",
+        "self_hit_points",
+        "allied_hit_points",
+        "enemy_hit_points",
+        "neutral_hit_points",
+        "other_hostile_hit_points",
+        "self_mobile_presence",
+        "self_building_presence",
+        "enemy_mobile_presence",
+        "enemy_building_presence"
+      ],
+      "minimapChannelNames": [
+        "visible_tiles",
+        "hidden_tiles",
+        "visible_ore",
+        "visible_gems",
+        "visible_ore_spawners",
+        "self_presence",
+        "allied_presence",
+        "enemy_presence",
+        "neutral_presence",
+        "other_hostile_presence",
+        "self_building_presence",
+        "self_mobile_presence",
+        "enemy_building_presence",
+        "enemy_mobile_presence",
+        "self_hit_points",
+        "allied_hit_points",
+        "enemy_hit_points",
+        "self_start_location"
+      ],
+      "maxEntities": 128,
+      "spatialSize": 32,
+      "minimapSize": 64,
+      "notes": [
+        "All features are extracted from player-safe observation APIs.",
+        "Do not replace this with getAllUnits() or enemy getPlayerData() calls for SL training data.",
+        "Object-name tokens are generated per extraction run and emitted separately from the numeric entity features.",
+        "The minimap is a compact top-down tensor, not a rendered UI image."
+      ]
+    },
+    "action": {
+      "rawActionIdNames": {
+        "0": "NoAction",
+        "1": "DropPlayerAction",
+        "3": "ResignGameAction",
+        "5": "PlaceBuildingAction",
+        "6": "SellObjectAction",
+        "7": "ToggleRepairAction",
+        "8": "SelectUnitsAction",
+        "9": "OrderUnitsAction",
+        "10": "UpdateQueueAction",
+        "12": "ActivateSuperWeaponAction",
+        "13": "PingLocationAction"
+      },
+      "actionFamilies": [
+        "no_action",
+        "select_units",
+        "order_units",
+        "update_queue",
+        "place_building",
+        "sell_object",
+        "toggle_repair",
+        "activate_super_weapon",
+        "resign_game",
+        "drop_player",
+        "ping_location",
+        "unknown"
+      ],
+      "actionFamilyIds": {
+        "no_action": 0,
+        "select_units": 1,
+        "order_units": 2,
+        "update_queue": 3,
+        "place_building": 4,
+        "sell_object": 5,
+        "toggle_repair": 6,
+        "activate_super_weapon": 7,
+        "resign_game": 8,
+        "drop_player": 9,
+        "ping_location": 10,
+        "unknown": 11
+      },
+      "orderTypeNames": {
+        "0": "Move",
+        "1": "ForceMove",
+        "2": "Attack",
+        "3": "ForceAttack",
+        "4": "AttackMove",
+        "5": "Guard",
+        "6": "GuardArea",
+        "7": "Capture",
+        "8": "Occupy",
+        "9": "Deploy",
+        "10": "DeploySelected",
+        "11": "Stop",
+        "12": "Cheer",
+        "13": "Dock",
+        "14": "Gather",
+        "15": "Repair",
+        "16": "Scatter",
+        "17": "EnterTransport",
+        "18": "PlaceBomb"
+      },
+      "queueTypeNames": {
+        "0": "Structures",
+        "1": "Armory",
+        "2": "Infantry",
+        "3": "Vehicles",
+        "4": "Aircrafts",
+        "5": "Ships"
+      },
+      "queueUpdateTypeNames": {
+        "0": "Add",
+        "1": "Cancel",
+        "2": "Hold"
+      },
+      "superWeaponTypeNames": {
+        "0": "MultiMissile",
+        "1": "IronCurtain",
+        "2": "LightningStorm",
+        "3": "ChronoSphere",
+        "4": "ChronoWarp",
+        "5": "ParaDrop",
+        "6": "AmerParaDrop"
+      },
+      "targetModes": [
+        "none",
+        "tile",
+        "object",
+        "ore_tile"
+      ],
+      "targetModeIds": {
+        "none": 0,
+        "tile": 1,
+        "object": 2,
+        "ore_tile": 3
+      },
+      "excludedByDefault": {
+        "noActionRawIds": [
+          0
+        ],
+        "uiOnlyRawIds": [
+          1,
+          13
+        ]
+      },
+      "notes": [
+        "Selection for order actions is inferred from the replay's preceding SelectUnitsAction stream.",
+        "PingLocationAction and DropPlayerAction are excluded by default because they are not useful RL/SL action targets.",
+        "delayToNextAction is computed on the kept action stream after filtering no-action/UI-only actions."
+      ]
+    },
+    "featureSections": [
+      {
+        "name": "scalar",
+        "shape": [
+          34
+        ],
+        "dtype": "float32"
+      },
+      {
+        "name": "lastActionContext",
+        "shape": [
+          4
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "currentSelectionCount",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "currentSelectionResolvedCount",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "currentSelectionOverflowCount",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "currentSelectionIndices",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "currentSelectionMask",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "currentSelectionResolvedMask",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "entityNameTokens",
+        "shape": [
+          128
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "entityMask",
+        "shape": [
+          128
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "entityFeatures",
+        "shape": [
+          128,
+          50
+        ],
+        "dtype": "float32"
+      },
+      {
+        "name": "spatial",
+        "shape": [
+          18,
+          32,
+          32
+        ],
+        "dtype": "float32"
+      },
+      {
+        "name": "minimap",
+        "shape": [
+          18,
+          64,
+          64
+        ],
+        "dtype": "float32"
+      }
+    ],
+    "labelSections": [
+      {
+        "name": "actionTypeId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "delayBin",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "queue",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "unitsIndices",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "unitsMask",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "unitsResolvedMask",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetEntityIndex",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetEntityResolved",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetLocation",
+        "shape": [
+          2
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetLocationValid",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetLocation2",
+        "shape": [
+          2
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetLocation2Valid",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "quantity",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      }
+    ],
+    "flatFeatureLength": 99049,
+    "flatLabelLength": 204,
+    "sharedNameVocabulary": {
+      "idToName": [
+        "<pad>",
+        "<unk>",
+        "ADOG",
+        "AMCV",
+        "DOG",
+        "ENGINEER",
+        "GACNST",
+        "GAPILE",
+        "GAPOWR",
+        "GAREFN",
+        "NACNST",
+        "NAHAND",
+        "NAPOWR",
+        "NAREFN",
+        "SENGINEER",
+        "SMCV"
+      ],
+      "nameToId": {
+        "<pad>": 0,
+        "<unk>": 1,
+        "ADOG": 2,
+        "AMCV": 3,
+        "DOG": 4,
+        "ENGINEER": 5,
+        "GACNST": 6,
+        "GAPILE": 7,
+        "GAPOWR": 8,
+        "GAREFN": 9,
+        "NACNST": 10,
+        "NAHAND": 11,
+        "NAPOWR": 12,
+        "NAREFN": 13,
+        "SENGINEER": 14,
+        "SMCV": 15
+      }
+    },
+    "notes": [
+      "Samples are action-centric: one observation tensor is aligned to one kept replay action.",
+      "Current-selection tensors are inferred from the replay command stream before the current action is processed.",
+      "Entity-relative selections and targets use indices into the current visible entity tensor and fall back to -1 when unresolved.",
+      "Name vocabularies are built per extraction run for now; later dataset-wide passes should stabilize them.",
+      "JSON output contains numeric arrays that are tensor-ready but not framework-native .pt/.npz files."
+    ]
+  },
+  "legacyLabelSchema": {
+    "labelSections": [
+      {
+        "name": "rawActionId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "actionFamilyId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "delayToNextAction",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "queue",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "orderTypeId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetModeId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetEntityIndex",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetNameToken",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetObjectType",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetTile",
+        "shape": [
+          2
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "targetIsOre",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "actionSelectedUnitCount",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "actionSelectedUnitResolvedCount",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "actionSelectedUnitOverflowCount",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "actionSelectedUnitIndices",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "actionSelectedUnitMask",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "actionSelectedUnitResolvedMask",
+        "shape": [
+          64
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "queueTypeId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "queueUpdateTypeId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "quantity",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "itemNameToken",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "itemType",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "itemCost",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "buildingNameToken",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "buildingType",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "buildingCost",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "buildingTile",
+        "shape": [
+          2
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "objectEntityIndex",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "objectNameToken",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "objectType",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "superWeaponTypeId",
+        "shape": [
+          1
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "superWeaponTile",
+        "shape": [
+          2
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "superWeaponTile2",
+        "shape": [
+          2
+        ],
+        "dtype": "int32"
+      },
+      {
+        "name": "pingTile",
+        "shape": [
+          2
+        ],
+        "dtype": "int32"
+      }
+    ],
+    "flatLabelLength": 228
+  },
+  "featureSectionOffsets": [
+    {
+      "name": "scalar",
+      "offset": 0,
+      "length": 34,
+      "shape": [
+        34
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "lastActionContext",
+      "offset": 34,
+      "length": 4,
+      "shape": [
+        4
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "currentSelectionCount",
+      "offset": 38,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "currentSelectionResolvedCount",
+      "offset": 39,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "currentSelectionOverflowCount",
+      "offset": 40,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "currentSelectionIndices",
+      "offset": 41,
+      "length": 64,
+      "shape": [
+        64
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "currentSelectionMask",
+      "offset": 105,
+      "length": 64,
+      "shape": [
+        64
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "currentSelectionResolvedMask",
+      "offset": 169,
+      "length": 64,
+      "shape": [
+        64
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "entityNameTokens",
+      "offset": 233,
+      "length": 128,
+      "shape": [
+        128
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "entityMask",
+      "offset": 361,
+      "length": 128,
+      "shape": [
+        128
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "entityFeatures",
+      "offset": 489,
+      "length": 6400,
+      "shape": [
+        128,
+        50
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "spatial",
+      "offset": 6889,
+      "length": 18432,
+      "shape": [
+        18,
+        32,
+        32
+      ],
+      "dtype": "float32"
+    },
+    {
+      "name": "minimap",
+      "offset": 25321,
+      "length": 73728,
+      "shape": [
+        18,
+        64,
+        64
+      ],
+      "dtype": "float32"
+    }
+  ],
+  "labelSectionOffsets": [
+    {
+      "name": "actionTypeId",
+      "offset": 0,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "delayBin",
+      "offset": 1,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "queue",
+      "offset": 2,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "unitsIndices",
+      "offset": 3,
+      "length": 64,
+      "shape": [
+        64
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "unitsMask",
+      "offset": 67,
+      "length": 64,
+      "shape": [
+        64
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "unitsResolvedMask",
+      "offset": 131,
+      "length": 64,
+      "shape": [
+        64
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "targetEntityIndex",
+      "offset": 195,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "targetEntityResolved",
+      "offset": 196,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "targetLocation",
+      "offset": 197,
+      "length": 2,
+      "shape": [
+        2
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "targetLocationValid",
+      "offset": 199,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "targetLocation2",
+      "offset": 200,
+      "length": 2,
+      "shape": [
+        2
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "targetLocation2Valid",
+      "offset": 202,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    },
+    {
+      "name": "quantity",
+      "offset": 203,
+      "length": 1,
+      "shape": [
+        1
+      ],
+      "dtype": "int32"
+    }
+  ],
+  "structuredFeatureShapes": {
+    "scalar": [
+      10,
+      34
+    ],
+    "lastActionContext": [
+      10,
+      4
+    ],
+    "currentSelectionCount": [
+      10,
+      1
+    ],
+    "currentSelectionResolvedCount": [
+      10,
+      1
+    ],
+    "currentSelectionOverflowCount": [
+      10,
+      1
+    ],
+    "currentSelectionIndices": [
+      10,
+      64
+    ],
+    "currentSelectionMask": [
+      10,
+      64
+    ],
+    "currentSelectionResolvedMask": [
+      10,
+      64
+    ],
+    "entityNameTokens": [
+      10,
+      128
+    ],
+    "entityMask": [
+      10,
+      128
+    ],
+    "entityFeatures": [
+      10,
+      128,
+      50
+    ],
+    "spatial": [
+      10,
+      18,
+      32,
+      32
+    ],
+    "minimap": [
+      10,
+      18,
+      64,
+      64
+    ]
+  },
+  "structuredLabelShapes": {
+    "actionTypeId": [
+      10,
+      1
+    ],
+    "delayBin": [
+      10,
+      1
+    ],
+    "queue": [
+      10,
+      1
+    ],
+    "unitsIndices": [
+      10,
+      64
+    ],
+    "unitsMask": [
+      10,
+      64
+    ],
+    "unitsResolvedMask": [
+      10,
+      64
+    ],
+    "targetEntityIndex": [
+      10,
+      1
+    ],
+    "targetEntityResolved": [
+      10,
+      1
+    ],
+    "targetLocation": [
+      10,
+      2
+    ],
+    "targetLocationValid": [
+      10,
+      1
+    ],
+    "targetLocation2": [
+      10,
+      2
+    ],
+    "targetLocation2Valid": [
+      10,
+      1
+    ],
+    "quantity": [
+      10,
+      1
+    ]
+  },
+  "sampleContextShapes": {
+    "ticks": [
+      10
+    ],
+    "playerIds": [
+      10
+    ]
+  },
+  "sourceOptions": {
+    "includeNoAction": false,
+    "includeUiActions": false,
+    "maxActions": 32,
+    "maxTick": 35251,
+    "maxEntities": 128,
+    "maxSelectedUnits": 64,
+    "spatialSize": 32,
+    "minimapSize": 64,
+    "includeFlat": true,
+    "includeDebug": false
+  },
+  "sourceCounts": {
+    "rawActionCounts": [
+      {
+        "rawActionId": 5,
+        "count": 4
+      },
+      {
+        "rawActionId": 8,
+        "count": 9
+      },
+      {
+        "rawActionId": 9,
+        "count": 7
+      },
+      {
+        "rawActionId": 10,
+        "count": 12
+      }
+    ],
+    "actionFamilyCounts": [
+      {
+        "actionFamily": "update_queue",
+        "count": 12
+      },
+      {
+        "actionFamily": "select_units",
+        "count": 9
+      },
+      {
+        "actionFamily": "order_units",
+        "count": 7
+      },
+      {
+        "actionFamily": "place_building",
+        "count": 4
+      }
+    ]
+  },
+  "playerCounts": {
+    "rawActionCounts": [
+      {
+        "rawActionId": 5,
+        "count": 2
+      },
+      {
+        "rawActionId": 9,
+        "count": 3
+      },
+      {
+        "rawActionId": 10,
+        "count": 5
+      }
+    ],
+    "actionFamilyCounts": [
+      {
+        "actionFamily": "update_queue",
+        "count": 5
+      },
+      {
+        "actionFamily": "order_units",
+        "count": 3
+      },
+      {
+        "actionFamily": "place_building",
+        "count": 2
+      }
+    ],
+    "actionTypeCountsV1": [
+      {
+        "actionTypeName": "Order::DeploySelected::none",
+        "count": 3
+      },
+      {
+        "actionTypeName": "PlaceBuilding::GAPILE",
+        "count": 1
+      },
+      {
+        "actionTypeName": "PlaceBuilding::GAPOWR",
+        "count": 1
+      },
+      {
+        "actionTypeName": "Queue::Add::ADOG",
+        "count": 1
+      },
+      {
+        "actionTypeName": "Queue::Add::ENGINEER",
+        "count": 1
+      },
+      {
+        "actionTypeName": "Queue::Add::GAPILE",
+        "count": 1
+      },
+      {
+        "actionTypeName": "Queue::Add::GAPOWR",
+        "count": 1
+      },
+      {
+        "actionTypeName": "Queue::Add::GAREFN",
+        "count": 1
+      }
+    ]
+  },
+  "actionFilter": {
+    "profile": "mas",
+    "sourceSampleCount": 14,
+    "keptSampleCount": 10,
+    "droppedSampleCount": 4,
+    "bucketCounts": [
+      {
+        "bucket": "keep_all",
+        "keepProb": 1.0,
+        "before": 10,
+        "kept": 10,
+        "dropped": 0
+      },
+      {
+        "bucket": "order_move",
+        "keepProb": 0.1,
+        "before": 1,
+        "kept": 0,
+        "dropped": 1
+      },
+      {
+        "bucket": "select_units",
+        "keepProb": 0.2,
+        "before": 3,
+        "kept": 0,
+        "dropped": 3
+      }
+    ]
+  },
+  "filterConfig": {
+    "profile": "mas",
+    "filterSeed": 0,
+    "noActionKeepProb": 0.0,
+    "selectUnitsKeepProb": 0.2,
+    "moveOrderKeepProb": 0.1,
+    "gatherOrderKeepProb": 0.1,
+    "attackOrderKeepProb": 0.5,
+    "notes": [
+      "This filter is applied in chronodivide-bot-sl after py-chronodivide extracts the action-aligned sample stream.",
+      "Temporal fields are rewritten on the final kept stream so lastActionContext and delayToNextAction stay consistent.",
+      "The default mas profile downsamples common RA2 action patterns analogously to mini-AlphaStar's replay filtering."
+    ]
+  },
+  "labelLayoutV1": {
+    "version": "v1",
+    "status": "canonical_main_label_layout",
+    "scope": "run_global",
+    "mainTensorUsesV1Only": true,
+    "delayBins": 128,
+    "missingInt": -1,
+    "coreLabelSections": [
+      "actionTypeId",
+      "delayBin",
+      "queue",
+      "unitsIndices",
+      "unitsMask",
+      "unitsResolvedMask",
+      "targetEntityIndex",
+      "targetEntityResolved",
+      "targetLocation",
+      "targetLocationValid",
+      "targetLocation2",
+      "targetLocation2Valid",
+      "quantity"
+    ],
+    "actionTypeVocabulary": [
+      {
+        "id": 0,
+        "name": "Order::AttackMove::tile",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 0,
+        "globalId": 0
+      },
+      {
+        "id": 1,
+        "name": "Order::Deploy::object",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": true,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 1,
+        "globalId": 1
+      },
+      {
+        "id": 2,
+        "name": "Order::DeploySelected::none",
+        "count": 3,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 2,
+        "globalId": 2
+      },
+      {
+        "id": 3,
+        "name": "Order::Move::tile",
+        "count": 2,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 3,
+        "globalId": 3
+      },
+      {
+        "id": 4,
+        "name": "PlaceBuilding::GAPILE",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 4,
+        "globalId": 4
+      },
+      {
+        "id": 5,
+        "name": "PlaceBuilding::GAPOWR",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 5,
+        "globalId": 5
+      },
+      {
+        "id": 6,
+        "name": "PlaceBuilding::NAHAND",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 6,
+        "globalId": 6
+      },
+      {
+        "id": 7,
+        "name": "PlaceBuilding::NAPOWR",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 7,
+        "globalId": 7
+      },
+      {
+        "id": 8,
+        "name": "Queue::Add::ADOG",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 8,
+        "globalId": 8
+      },
+      {
+        "id": 9,
+        "name": "Queue::Add::DOG",
+        "count": 2,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 9,
+        "globalId": 9
+      },
+      {
+        "id": 10,
+        "name": "Queue::Add::ENGINEER",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 10,
+        "globalId": 10
+      },
+      {
+        "id": 11,
+        "name": "Queue::Add::GAPILE",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 11,
+        "globalId": 11
+      },
+      {
+        "id": 12,
+        "name": "Queue::Add::GAPOWR",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 12,
+        "globalId": 12
+      },
+      {
+        "id": 13,
+        "name": "Queue::Add::GAREFN",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 13,
+        "globalId": 13
+      },
+      {
+        "id": 14,
+        "name": "Queue::Add::NAHAND",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 14,
+        "globalId": 14
+      },
+      {
+        "id": 15,
+        "name": "Queue::Add::NAPOWR",
+        "count": 2,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 15,
+        "globalId": 15
+      },
+      {
+        "id": 16,
+        "name": "Queue::Add::NAREFN",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 16,
+        "globalId": 16
+      },
+      {
+        "id": 17,
+        "name": "Queue::Add::SENGINEER",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        },
+        "localId": 17,
+        "globalId": 17
+      },
+      {
+        "id": 18,
+        "name": "SelectUnits",
+        "count": 9,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        },
+        "localId": 18,
+        "globalId": 18
+      }
+    ],
+    "actionTypeNameToId": {
+      "Order::AttackMove::tile": 0,
+      "Order::Deploy::object": 1,
+      "Order::DeploySelected::none": 2,
+      "Order::Move::tile": 3,
+      "PlaceBuilding::GAPILE": 4,
+      "PlaceBuilding::GAPOWR": 5,
+      "PlaceBuilding::NAHAND": 6,
+      "PlaceBuilding::NAPOWR": 7,
+      "Queue::Add::ADOG": 8,
+      "Queue::Add::DOG": 9,
+      "Queue::Add::ENGINEER": 10,
+      "Queue::Add::GAPILE": 11,
+      "Queue::Add::GAPOWR": 12,
+      "Queue::Add::GAREFN": 13,
+      "Queue::Add::NAHAND": 14,
+      "Queue::Add::NAPOWR": 15,
+      "Queue::Add::NAREFN": 16,
+      "Queue::Add::SENGINEER": 17,
+      "SelectUnits": 18
+    },
+    "notes": [
+      "This is the first V1 implementation step: fine-grained action types and delay bins are derived in chronodivide-bot-sl.",
+      "ActionTypeId is replay-local for now because the transformer does not yet build a run-global vocabulary before writing shards.",
+      "Legacy coarse label sections are still preserved during the migration period.",
+      "Saved actionTypeId values use run-global ids assigned in first-seen replay order across this transform run."
+    ],
+    "localActionTypeVocabulary": [
+      {
+        "id": 0,
+        "name": "Order::AttackMove::tile",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 1,
+        "name": "Order::Deploy::object",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": true,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 2,
+        "name": "Order::DeploySelected::none",
+        "count": 3,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 3,
+        "name": "Order::Move::tile",
+        "count": 2,
+        "semanticMask": {
+          "usesQueue": true,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 4,
+        "name": "PlaceBuilding::GAPILE",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 5,
+        "name": "PlaceBuilding::GAPOWR",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 6,
+        "name": "PlaceBuilding::NAHAND",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 7,
+        "name": "PlaceBuilding::NAPOWR",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": true,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      },
+      {
+        "id": 8,
+        "name": "Queue::Add::ADOG",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 9,
+        "name": "Queue::Add::DOG",
+        "count": 2,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 10,
+        "name": "Queue::Add::ENGINEER",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 11,
+        "name": "Queue::Add::GAPILE",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 12,
+        "name": "Queue::Add::GAPOWR",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 13,
+        "name": "Queue::Add::GAREFN",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 14,
+        "name": "Queue::Add::NAHAND",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 15,
+        "name": "Queue::Add::NAPOWR",
+        "count": 2,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 16,
+        "name": "Queue::Add::NAREFN",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 17,
+        "name": "Queue::Add::SENGINEER",
+        "count": 1,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": false,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": true
+        }
+      },
+      {
+        "id": 18,
+        "name": "SelectUnits",
+        "count": 9,
+        "semanticMask": {
+          "usesQueue": false,
+          "usesUnits": true,
+          "usesTargetEntity": false,
+          "usesTargetLocation": false,
+          "usesTargetLocation2": false,
+          "usesQuantity": false
+        }
+      }
+    ],
+    "localActionTypeNameToId": {
+      "Order::AttackMove::tile": 0,
+      "Order::Deploy::object": 1,
+      "Order::DeploySelected::none": 2,
+      "Order::Move::tile": 3,
+      "PlaceBuilding::GAPILE": 4,
+      "PlaceBuilding::GAPOWR": 5,
+      "PlaceBuilding::NAHAND": 6,
+      "PlaceBuilding::NAPOWR": 7,
+      "Queue::Add::ADOG": 8,
+      "Queue::Add::DOG": 9,
+      "Queue::Add::ENGINEER": 10,
+      "Queue::Add::GAPILE": 11,
+      "Queue::Add::GAPOWR": 12,
+      "Queue::Add::GAREFN": 13,
+      "Queue::Add::NAHAND": 14,
+      "Queue::Add::NAPOWR": 15,
+      "Queue::Add::NAREFN": 16,
+      "Queue::Add::SENGINEER": 17,
+      "SelectUnits": 18
+    }
+  },
+  "tensorPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_global_2replays_20260317\\00758dde-b725-4442-ae8f-a657069251a0__bikerush.pt",
+  "structuredTensorPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_global_2replays_20260317\\00758dde-b725-4442-ae8f-a657069251a0__bikerush.sections.pt"
+}

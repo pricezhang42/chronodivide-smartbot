@@ -1,0 +1,76 @@
+{
+  "createdAt": "2026-03-17T21:36:59.617489+00:00",
+  "config": {
+    "replay_dir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50",
+    "output_dir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_canonical_20260317",
+    "data_dir": "D:\\workspace\\ra2-headless-mix",
+    "py_chronodivide_script": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\py-chronodivide\\extract_sl_tensors.mjs",
+    "replay_glob": "*.rpl",
+    "replay_start": 0,
+    "max_replays": 1,
+    "player": "all",
+    "include_no_action": false,
+    "include_ui_actions": false,
+    "action_filter_profile": "mas",
+    "filter_seed": 0,
+    "no_action_keep_prob": 0.0,
+    "select_units_keep_prob": 0.2,
+    "move_order_keep_prob": 0.1,
+    "gather_order_keep_prob": 0.1,
+    "attack_order_keep_prob": 0.5,
+    "max_actions": 32,
+    "max_tick": null,
+    "max_entities": 128,
+    "max_selected_units": 64,
+    "spatial_size": 32,
+    "minimap_size": 64,
+    "overwrite": true,
+    "fail_fast": false
+  },
+  "replayCount": 1,
+  "savedShardCount": 2,
+  "skippedShardCount": 0,
+  "emptyReplayCount": 0,
+  "errorCount": 0,
+  "results": [
+    {
+      "status": "saved",
+      "replay": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl",
+      "playerName": "bikerush",
+      "sampleCount": 10,
+      "sourceSampleCount": 14,
+      "droppedSampleCount": 4,
+      "featureShape": [
+        10,
+        99049
+      ],
+      "labelShape": [
+        10,
+        204
+      ],
+      "tensorPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_canonical_20260317\\00758dde-b725-4442-ae8f-a657069251a0__bikerush.pt",
+      "structuredTensorPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_canonical_20260317\\00758dde-b725-4442-ae8f-a657069251a0__bikerush.sections.pt",
+      "metadataPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_canonical_20260317\\00758dde-b725-4442-ae8f-a657069251a0__bikerush.meta.json"
+    },
+    {
+      "status": "saved",
+      "replay": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl",
+      "playerName": "mecharse",
+      "sampleCount": 11,
+      "sourceSampleCount": 18,
+      "droppedSampleCount": 7,
+      "featureShape": [
+        11,
+        99049
+      ],
+      "labelShape": [
+        11,
+        204
+      ],
+      "tensorPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_canonical_20260317\\00758dde-b725-4442-ae8f-a657069251a0__mecharse.pt",
+      "structuredTensorPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_canonical_20260317\\00758dde-b725-4442-ae8f-a657069251a0__mecharse.sections.pt",
+      "metadataPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\v1_label_canonical_20260317\\00758dde-b725-4442-ae8f-a657069251a0__mecharse.meta.json"
+    }
+  ],
+  "errors": []
+}
