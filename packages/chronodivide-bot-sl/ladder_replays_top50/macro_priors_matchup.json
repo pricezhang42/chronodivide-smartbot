@@ -1,0 +1,1101 @@
+{
+  "replayCount": 20,
+  "totalMacroActions": 9237,
+  "stagePriors": {
+    "build": 0.06582223665692324,
+    "production": 0.17819638410739416,
+    "setup": 0.03117895420591101,
+    "tactical": 0.7248024250297715
+  },
+  "templatePriors": {
+    "attack_move_center": 0.27506621263715475,
+    "deploy_mcv": 0.10896708286038592,
+    "train_infantry": 0.18312523647370413,
+    "train_vehicle": 0.4328414680287552
+  },
+  "byMap": {
+    "2_malibu_cliffs_le.map": {
+      "replayCount": 4,
+      "totalMacroActions": 2401,
+      "stagePriors": {
+        "build": 0.06205747605164515,
+        "production": 0.17659308621407746,
+        "setup": 0.03331945022907122,
+        "tactical": 0.7280299875052062
+      },
+      "templatePriors": {
+        "attack_move_center": 0.33465608465608465,
+        "deploy_mcv": 0.10582010582010581,
+        "train_infantry": 0.12566137566137567,
+        "train_vehicle": 0.43386243386243384
+      }
+    },
+    "2_pinch_point_le.map": {
+      "replayCount": 3,
+      "totalMacroActions": 1608,
+      "stagePriors": {
+        "build": 0.06778606965174129,
+        "production": 0.21890547263681592,
+        "setup": 0.03731343283582089,
+        "tactical": 0.6759950248756219
+      },
+      "templatePriors": {
+        "attack_move_center": 0.205078125,
+        "deploy_mcv": 0.1171875,
+        "train_infantry": 0.25,
+        "train_vehicle": 0.427734375
+      }
+    },
+    "2_poltergeist_precaptured.map": {
+      "replayCount": 1,
+      "totalMacroActions": 351,
+      "stagePriors": {
+        "build": 0.07692307692307693,
+        "production": 0.1737891737891738,
+        "setup": 0.05413105413105413,
+        "tactical": 0.6951566951566952
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.24050632911392406,
+        "train_infantry": 0.17721518987341772,
+        "train_vehicle": 0.5822784810126582
+      }
+    },
+    "2_under_pressure.map": {
+      "replayCount": 3,
+      "totalMacroActions": 779,
+      "stagePriors": {
+        "build": 0.07445442875481387,
+        "production": 0.13350449293966624,
+        "setup": 0.03080872913992298,
+        "tactical": 0.7612323491655969
+      },
+      "templatePriors": {
+        "attack_move_center": 0.152317880794702,
+        "deploy_mcv": 0.15894039735099338,
+        "train_infantry": 0.2251655629139073,
+        "train_vehicle": 0.46357615894039733
+      }
+    },
+    "4_caverns_v410.map": {
+      "replayCount": 3,
+      "totalMacroActions": 1072,
+      "stagePriors": {
+        "build": 0.06996268656716417,
+        "production": 0.16324626865671643,
+        "setup": 0.033582089552238806,
+        "tactical": 0.7332089552238806
+      },
+      "templatePriors": {
+        "attack_move_center": 0.38823529411764707,
+        "deploy_mcv": 0.10588235294117647,
+        "train_infantry": 0.12058823529411765,
+        "train_vehicle": 0.38529411764705884
+      }
+    },
+    "4_desert_island_le_v108.map": {
+      "replayCount": 2,
+      "totalMacroActions": 1326,
+      "stagePriors": {
+        "build": 0.048265460030165915,
+        "production": 0.17496229260935142,
+        "setup": 0.01583710407239819,
+        "tactical": 0.7609351432880844
+      },
+      "templatePriors": {
+        "attack_move_center": 0.16501650165016502,
+        "deploy_mcv": 0.06930693069306931,
+        "train_infantry": 0.22112211221122113,
+        "train_vehicle": 0.5445544554455446
+      }
+    },
+    "4_jungle_of_vietnam_le.map": {
+      "replayCount": 2,
+      "totalMacroActions": 1094,
+      "stagePriors": {
+        "build": 0.056672760511883,
+        "production": 0.1380255941499086,
+        "setup": 0.03016453382084095,
+        "tactical": 0.7751371115173674
+      },
+      "templatePriors": {
+        "attack_move_center": 0.38666666666666666,
+        "deploy_mcv": 0.11,
+        "train_infantry": 0.14666666666666667,
+        "train_vehicle": 0.3566666666666667
+      }
+    },
+    "offensedefense.map": {
+      "replayCount": 2,
+      "totalMacroActions": 606,
+      "stagePriors": {
+        "build": 0.10561056105610561,
+        "production": 0.24257425742574257,
+        "setup": 0.024752475247524754,
+        "tactical": 0.6270627062706271
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2376237623762376,
+        "deploy_mcv": 0.07425742574257425,
+        "train_infantry": 0.30198019801980197,
+        "train_vehicle": 0.38613861386138615
+      }
+    }
+  },
+  "byPlayerCountry": {
+    "americans": {
+      "replayCount": 11,
+      "totalMacroActions": 3450,
+      "stagePriors": {
+        "build": 0.05681159420289855,
+        "production": 0.16492753623188405,
+        "setup": 0.03681159420289855,
+        "tactical": 0.7414492753623189
+      },
+      "templatePriors": {
+        "attack_move_center": 0.21979286536248563,
+        "deploy_mcv": 0.14614499424626007,
+        "train_infantry": 0.22554660529344073,
+        "train_vehicle": 0.4085155350978136
+      }
+    },
+    "arabs": {
+      "replayCount": 17,
+      "totalMacroActions": 4864,
+      "stagePriors": {
+        "build": 0.06291118421052631,
+        "production": 0.18174342105263158,
+        "setup": 0.028782894736842105,
+        "tactical": 0.7265625
+      },
+      "templatePriors": {
+        "attack_move_center": 0.31043771043771046,
+        "deploy_mcv": 0.09427609427609428,
+        "train_infantry": 0.1447811447811448,
+        "train_vehicle": 0.4505050505050505
+      }
+    },
+    "british": {
+      "replayCount": 1,
+      "totalMacroActions": 164,
+      "stagePriors": {
+        "build": 0.09146341463414634,
+        "production": 0.16463414634146342,
+        "setup": 0.012195121951219513,
+        "tactical": 0.7317073170731707
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.06896551724137931,
+        "train_infantry": 0.5862068965517241,
+        "train_vehicle": 0.3448275862068966
+      }
+    },
+    "french": {
+      "replayCount": 3,
+      "totalMacroActions": 682,
+      "stagePriors": {
+        "build": 0.11436950146627566,
+        "production": 0.20967741935483872,
+        "setup": 0.024926686217008796,
+        "tactical": 0.6510263929618768
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2626728110599078,
+        "deploy_mcv": 0.07834101382488479,
+        "train_infantry": 0.22580645161290322,
+        "train_vehicle": 0.43317972350230416
+      }
+    },
+    "germans": {
+      "replayCount": 1,
+      "totalMacroActions": 77,
+      "stagePriors": {
+        "build": 0.16883116883116883,
+        "production": 0.2987012987012987,
+        "setup": 0.025974025974025976,
+        "tactical": 0.5064935064935064
+      },
+      "templatePriors": {
+        "attack_move_center": 0.4186046511627907,
+        "deploy_mcv": 0.046511627906976744,
+        "train_infantry": 0.16279069767441862,
+        "train_vehicle": 0.37209302325581395
+      }
+    }
+  },
+  "byMatchup": {
+    "americans::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 888,
+      "stagePriors": {
+        "build": 0.03265765765765766,
+        "production": 0.14864864864864866,
+        "setup": 0.015765765765765764,
+        "tactical": 0.8029279279279279
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2512820512820513,
+        "deploy_mcv": 0.07179487179487179,
+        "train_infantry": 0.24615384615384617,
+        "train_vehicle": 0.4307692307692308
+      }
+    },
+    "americans::arabs": {
+      "replayCount": 9,
+      "totalMacroActions": 2148,
+      "stagePriors": {
+        "build": 0.07076350093109869,
+        "production": 0.18202979515828677,
+        "setup": 0.04655493482309125,
+        "tactical": 0.7006517690875232
+      },
+      "templatePriors": {
+        "attack_move_center": 0.19830508474576272,
+        "deploy_mcv": 0.1694915254237288,
+        "train_infantry": 0.2305084745762712,
+        "train_vehicle": 0.4016949152542373
+      }
+    },
+    "americans::british": {
+      "replayCount": 1,
+      "totalMacroActions": 414,
+      "stagePriors": {
+        "build": 0.036231884057971016,
+        "production": 0.1111111111111111,
+        "setup": 0.03140096618357488,
+        "tactical": 0.821256038647343
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2976190476190476,
+        "deploy_mcv": 0.15476190476190477,
+        "train_infantry": 0.14285714285714285,
+        "train_vehicle": 0.40476190476190477
+      }
+    },
+    "arabs::americans": {
+      "replayCount": 9,
+      "totalMacroActions": 2067,
+      "stagePriors": {
+        "build": 0.06531204644412192,
+        "production": 0.16545718432510886,
+        "setup": 0.024189646831156264,
+        "tactical": 0.745041122399613
+      },
+      "templatePriors": {
+        "attack_move_center": 0.36774193548387096,
+        "deploy_mcv": 0.08064516129032258,
+        "train_infantry": 0.1,
+        "train_vehicle": 0.45161290322580644
+      }
+    },
+    "arabs::arabs": {
+      "replayCount": 6,
+      "totalMacroActions": 1913,
+      "stagePriors": {
+        "build": 0.07109252483010978,
+        "production": 0.18557239937271303,
+        "setup": 0.029796131730266597,
+        "tactical": 0.7135389440669107
+      },
+      "templatePriors": {
+        "attack_move_center": 0.1557377049180328,
+        "deploy_mcv": 0.1168032786885246,
+        "train_infantry": 0.2766393442622951,
+        "train_vehicle": 0.45081967213114754
+      }
+    },
+    "arabs::french": {
+      "replayCount": 2,
+      "totalMacroActions": 884,
+      "stagePriors": {
+        "build": 0.03959276018099547,
+        "production": 0.21153846153846154,
+        "setup": 0.03733031674208145,
+        "tactical": 0.7115384615384616
+      },
+      "templatePriors": {
+        "attack_move_center": 0.41644562334217505,
+        "deploy_mcv": 0.08753315649867374,
+        "train_infantry": 0.04774535809018567,
+        "train_vehicle": 0.4482758620689655
+      }
+    },
+    "british::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 164,
+      "stagePriors": {
+        "build": 0.09146341463414634,
+        "production": 0.16463414634146342,
+        "setup": 0.012195121951219513,
+        "tactical": 0.7317073170731707
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.06896551724137931,
+        "train_infantry": 0.5862068965517241,
+        "train_vehicle": 0.3448275862068966
+      }
+    },
+    "french::arabs": {
+      "replayCount": 2,
+      "totalMacroActions": 574,
+      "stagePriors": {
+        "build": 0.09407665505226481,
+        "production": 0.2038327526132404,
+        "setup": 0.02613240418118467,
+        "tactical": 0.6759581881533101
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2413793103448276,
+        "deploy_mcv": 0.08620689655172414,
+        "train_infantry": 0.1896551724137931,
+        "train_vehicle": 0.4827586206896552
+      }
+    },
+    "french::germans": {
+      "replayCount": 1,
+      "totalMacroActions": 108,
+      "stagePriors": {
+        "build": 0.2222222222222222,
+        "production": 0.24074074074074073,
+        "setup": 0.018518518518518517,
+        "tactical": 0.5185185185185185
+      },
+      "templatePriors": {
+        "attack_move_center": 0.3488372093023256,
+        "deploy_mcv": 0.046511627906976744,
+        "train_infantry": 0.37209302325581395,
+        "train_vehicle": 0.23255813953488372
+      }
+    },
+    "germans::french": {
+      "replayCount": 1,
+      "totalMacroActions": 77,
+      "stagePriors": {
+        "build": 0.16883116883116883,
+        "production": 0.2987012987012987,
+        "setup": 0.025974025974025976,
+        "tactical": 0.5064935064935064
+      },
+      "templatePriors": {
+        "attack_move_center": 0.4186046511627907,
+        "deploy_mcv": 0.046511627906976744,
+        "train_infantry": 0.16279069767441862,
+        "train_vehicle": 0.37209302325581395
+      }
+    }
+  },
+  "byMapAndPlayerCountry": {
+    "2_malibu_cliffs_le.map::americans": {
+      "replayCount": 2,
+      "totalMacroActions": 385,
+      "stagePriors": {
+        "build": 0.07532467532467532,
+        "production": 0.16883116883116883,
+        "setup": 0.03896103896103896,
+        "tactical": 0.7168831168831169
+      },
+      "templatePriors": {
+        "attack_move_center": 0.10227272727272728,
+        "deploy_mcv": 0.17045454545454544,
+        "train_infantry": 0.29545454545454547,
+        "train_vehicle": 0.4318181818181818
+      }
+    },
+    "2_malibu_cliffs_le.map::arabs": {
+      "replayCount": 4,
+      "totalMacroActions": 1564,
+      "stagePriors": {
+        "build": 0.0479539641943734,
+        "production": 0.17647058823529413,
+        "setup": 0.0370843989769821,
+        "tactical": 0.7384910485933504
+      },
+      "templatePriors": {
+        "attack_move_center": 0.3938294010889292,
+        "deploy_mcv": 0.10526315789473684,
+        "train_infantry": 0.07622504537205081,
+        "train_vehicle": 0.4246823956442831
+      }
+    },
+    "2_malibu_cliffs_le.map::french": {
+      "replayCount": 1,
+      "totalMacroActions": 452,
+      "stagePriors": {
+        "build": 0.09955752212389381,
+        "production": 0.1836283185840708,
+        "setup": 0.015486725663716814,
+        "tactical": 0.7013274336283186
+      },
+      "templatePriors": {
+        "attack_move_center": 0.23076923076923078,
+        "deploy_mcv": 0.05982905982905983,
+        "train_infantry": 0.23076923076923078,
+        "train_vehicle": 0.47863247863247865
+      }
+    },
+    "2_pinch_point_le.map::americans": {
+      "replayCount": 2,
+      "totalMacroActions": 622,
+      "stagePriors": {
+        "build": 0.07877813504823152,
+        "production": 0.20418006430868169,
+        "setup": 0.05305466237942122,
+        "tactical": 0.6639871382636656
+      },
+      "templatePriors": {
+        "attack_move_center": 0.0718562874251497,
+        "deploy_mcv": 0.19760479041916168,
+        "train_infantry": 0.2694610778443114,
+        "train_vehicle": 0.46107784431137727
+      }
+    },
+    "2_pinch_point_le.map::arabs": {
+      "replayCount": 3,
+      "totalMacroActions": 986,
+      "stagePriors": {
+        "build": 0.060851926977687626,
+        "production": 0.2281947261663286,
+        "setup": 0.02738336713995943,
+        "tactical": 0.6835699797160243
+      },
+      "templatePriors": {
+        "attack_move_center": 0.26956521739130435,
+        "deploy_mcv": 0.0782608695652174,
+        "train_infantry": 0.24057971014492754,
+        "train_vehicle": 0.4115942028985507
+      }
+    },
+    "2_poltergeist_precaptured.map::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 159,
+      "stagePriors": {
+        "build": 0.06918238993710692,
+        "production": 0.18238993710691823,
+        "setup": 0.06289308176100629,
+        "tactical": 0.6855345911949685
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.2631578947368421,
+        "train_infantry": 0.2631578947368421,
+        "train_vehicle": 0.47368421052631576
+      }
+    },
+    "2_poltergeist_precaptured.map::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 192,
+      "stagePriors": {
+        "build": 0.08333333333333333,
+        "production": 0.16666666666666666,
+        "setup": 0.046875,
+        "tactical": 0.703125
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.21951219512195122,
+        "train_infantry": 0.0975609756097561,
+        "train_vehicle": 0.6829268292682927
+      }
+    },
+    "2_under_pressure.map::arabs": {
+      "replayCount": 3,
+      "totalMacroActions": 779,
+      "stagePriors": {
+        "build": 0.07445442875481387,
+        "production": 0.13350449293966624,
+        "setup": 0.03080872913992298,
+        "tactical": 0.7612323491655969
+      },
+      "templatePriors": {
+        "attack_move_center": 0.152317880794702,
+        "deploy_mcv": 0.15894039735099338,
+        "train_infantry": 0.2251655629139073,
+        "train_vehicle": 0.46357615894039733
+      }
+    },
+    "4_caverns_v410.map::americans": {
+      "replayCount": 2,
+      "totalMacroActions": 420,
+      "stagePriors": {
+        "build": 0.08095238095238096,
+        "production": 0.16666666666666666,
+        "setup": 0.04047619047619048,
+        "tactical": 0.7119047619047619
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.20238095238095238,
+        "train_infantry": 0.23809523809523808,
+        "train_vehicle": 0.5595238095238095
+      }
+    },
+    "4_caverns_v410.map::arabs": {
+      "replayCount": 3,
+      "totalMacroActions": 530,
+      "stagePriors": {
+        "build": 0.06037735849056604,
+        "production": 0.1339622641509434,
+        "setup": 0.020754716981132074,
+        "tactical": 0.7849056603773585
+      },
+      "templatePriors": {
+        "attack_move_center": 0.5879396984924623,
+        "deploy_mcv": 0.05527638190954774,
+        "train_infantry": 0.07537688442211055,
+        "train_vehicle": 0.2814070351758794
+      }
+    },
+    "4_caverns_v410.map::french": {
+      "replayCount": 1,
+      "totalMacroActions": 122,
+      "stagePriors": {
+        "build": 0.07377049180327869,
+        "production": 0.2786885245901639,
+        "setup": 0.06557377049180328,
+        "tactical": 0.5819672131147541
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2631578947368421,
+        "deploy_mcv": 0.14035087719298245,
+        "train_infantry": 0.10526315789473684,
+        "train_vehicle": 0.49122807017543857
+      }
+    },
+    "4_desert_island_le_v108.map::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 888,
+      "stagePriors": {
+        "build": 0.03265765765765766,
+        "production": 0.14864864864864866,
+        "setup": 0.015765765765765764,
+        "tactical": 0.8029279279279279
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2512820512820513,
+        "deploy_mcv": 0.07179487179487179,
+        "train_infantry": 0.24615384615384617,
+        "train_vehicle": 0.4307692307692308
+      }
+    },
+    "4_desert_island_le_v108.map::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 438,
+      "stagePriors": {
+        "build": 0.07990867579908675,
+        "production": 0.228310502283105,
+        "setup": 0.01598173515981735,
+        "tactical": 0.6757990867579908
+      },
+      "templatePriors": {
+        "attack_move_center": 0.009259259259259259,
+        "deploy_mcv": 0.06481481481481481,
+        "train_infantry": 0.17592592592592593,
+        "train_vehicle": 0.75
+      }
+    },
+    "4_jungle_of_vietnam_le.map::americans": {
+      "replayCount": 2,
+      "totalMacroActions": 699,
+      "stagePriors": {
+        "build": 0.04291845493562232,
+        "production": 0.12732474964234622,
+        "setup": 0.04005722460658083,
+        "tactical": 0.7896995708154506
+      },
+      "templatePriors": {
+        "attack_move_center": 0.4978540772532189,
+        "deploy_mcv": 0.12017167381974249,
+        "train_infantry": 0.08583690987124463,
+        "train_vehicle": 0.296137339055794
+      }
+    },
+    "4_jungle_of_vietnam_le.map::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 231,
+      "stagePriors": {
+        "build": 0.0735930735930736,
+        "production": 0.15151515151515152,
+        "setup": 0.012987012987012988,
+        "tactical": 0.7619047619047619
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.07894736842105263,
+        "train_infantry": 0.18421052631578946,
+        "train_vehicle": 0.7368421052631579
+      }
+    },
+    "4_jungle_of_vietnam_le.map::british": {
+      "replayCount": 1,
+      "totalMacroActions": 164,
+      "stagePriors": {
+        "build": 0.09146341463414634,
+        "production": 0.16463414634146342,
+        "setup": 0.012195121951219513,
+        "tactical": 0.7317073170731707
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.06896551724137931,
+        "train_infantry": 0.5862068965517241,
+        "train_vehicle": 0.3448275862068966
+      }
+    },
+    "offensedefense.map::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 277,
+      "stagePriors": {
+        "build": 0.05054151624548736,
+        "production": 0.20577617328519857,
+        "setup": 0.036101083032490974,
+        "tactical": 0.7075812274368231
+      },
+      "templatePriors": {
+        "attack_move_center": 0.078125,
+        "deploy_mcv": 0.15625,
+        "train_infantry": 0.421875,
+        "train_vehicle": 0.34375
+      }
+    },
+    "offensedefense.map::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 144,
+      "stagePriors": {
+        "build": 0.09027777777777778,
+        "production": 0.2847222222222222,
+        "setup": 0.006944444444444444,
+        "tactical": 0.6180555555555556
+      },
+      "templatePriors": {
+        "attack_move_center": 0.19230769230769232,
+        "deploy_mcv": 0.019230769230769232,
+        "train_infantry": 0.21153846153846154,
+        "train_vehicle": 0.5769230769230769
+      }
+    },
+    "offensedefense.map::french": {
+      "replayCount": 1,
+      "totalMacroActions": 108,
+      "stagePriors": {
+        "build": 0.2222222222222222,
+        "production": 0.24074074074074073,
+        "setup": 0.018518518518518517,
+        "tactical": 0.5185185185185185
+      },
+      "templatePriors": {
+        "attack_move_center": 0.3488372093023256,
+        "deploy_mcv": 0.046511627906976744,
+        "train_infantry": 0.37209302325581395,
+        "train_vehicle": 0.23255813953488372
+      }
+    },
+    "offensedefense.map::germans": {
+      "replayCount": 1,
+      "totalMacroActions": 77,
+      "stagePriors": {
+        "build": 0.16883116883116883,
+        "production": 0.2987012987012987,
+        "setup": 0.025974025974025976,
+        "tactical": 0.5064935064935064
+      },
+      "templatePriors": {
+        "attack_move_center": 0.4186046511627907,
+        "deploy_mcv": 0.046511627906976744,
+        "train_infantry": 0.16279069767441862,
+        "train_vehicle": 0.37209302325581395
+      }
+    }
+  },
+  "byMapAndMatchup": {
+    "2_malibu_cliffs_le.map::americans::arabs": {
+      "replayCount": 2,
+      "totalMacroActions": 385,
+      "stagePriors": {
+        "build": 0.07532467532467532,
+        "production": 0.16883116883116883,
+        "setup": 0.03896103896103896,
+        "tactical": 0.7168831168831169
+      },
+      "templatePriors": {
+        "attack_move_center": 0.10227272727272728,
+        "deploy_mcv": 0.17045454545454544,
+        "train_infantry": 0.29545454545454547,
+        "train_vehicle": 0.4318181818181818
+      }
+    },
+    "2_malibu_cliffs_le.map::arabs::americans": {
+      "replayCount": 2,
+      "totalMacroActions": 518,
+      "stagePriors": {
+        "build": 0.052123552123552123,
+        "production": 0.138996138996139,
+        "setup": 0.03474903474903475,
+        "tactical": 0.7741312741312741
+      },
+      "templatePriors": {
+        "attack_move_center": 0.375,
+        "deploy_mcv": 0.125,
+        "train_infantry": 0.10416666666666667,
+        "train_vehicle": 0.3958333333333333
+      }
+    },
+    "2_malibu_cliffs_le.map::arabs::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 252,
+      "stagePriors": {
+        "build": 0.07936507936507936,
+        "production": 0.1388888888888889,
+        "setup": 0.047619047619047616,
+        "tactical": 0.7341269841269841
+      },
+      "templatePriors": {
+        "attack_move_center": 0.29850746268656714,
+        "deploy_mcv": 0.1791044776119403,
+        "train_infantry": 0.19402985074626866,
+        "train_vehicle": 0.3283582089552239
+      }
+    },
+    "2_malibu_cliffs_le.map::arabs::french": {
+      "replayCount": 1,
+      "totalMacroActions": 794,
+      "stagePriors": {
+        "build": 0.03526448362720403,
+        "production": 0.2128463476070529,
+        "setup": 0.03526448362720403,
+        "tactical": 0.716624685138539
+      },
+      "templatePriors": {
+        "attack_move_center": 0.42058823529411765,
+        "deploy_mcv": 0.08235294117647059,
+        "train_infantry": 0.041176470588235294,
+        "train_vehicle": 0.45588235294117646
+      }
+    },
+    "2_malibu_cliffs_le.map::french::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 452,
+      "stagePriors": {
+        "build": 0.09955752212389381,
+        "production": 0.1836283185840708,
+        "setup": 0.015486725663716814,
+        "tactical": 0.7013274336283186
+      },
+      "templatePriors": {
+        "attack_move_center": 0.23076923076923078,
+        "deploy_mcv": 0.05982905982905983,
+        "train_infantry": 0.23076923076923078,
+        "train_vehicle": 0.47863247863247865
+      }
+    },
+    "2_pinch_point_le.map::americans::arabs": {
+      "replayCount": 2,
+      "totalMacroActions": 622,
+      "stagePriors": {
+        "build": 0.07877813504823152,
+        "production": 0.20418006430868169,
+        "setup": 0.05305466237942122,
+        "tactical": 0.6639871382636656
+      },
+      "templatePriors": {
+        "attack_move_center": 0.0718562874251497,
+        "deploy_mcv": 0.19760479041916168,
+        "train_infantry": 0.2694610778443114,
+        "train_vehicle": 0.46107784431137727
+      }
+    },
+    "2_pinch_point_le.map::arabs::americans": {
+      "replayCount": 2,
+      "totalMacroActions": 542,
+      "stagePriors": {
+        "build": 0.06826568265682657,
+        "production": 0.2011070110701107,
+        "setup": 0.023985239852398525,
+        "tactical": 0.7066420664206642
+      },
+      "templatePriors": {
+        "attack_move_center": 0.3333333333333333,
+        "deploy_mcv": 0.07103825136612021,
+        "train_infantry": 0.07650273224043716,
+        "train_vehicle": 0.5191256830601093
+      }
+    },
+    "2_pinch_point_le.map::arabs::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 444,
+      "stagePriors": {
+        "build": 0.0518018018018018,
+        "production": 0.26126126126126126,
+        "setup": 0.03153153153153153,
+        "tactical": 0.6554054054054054
+      },
+      "templatePriors": {
+        "attack_move_center": 0.19753086419753085,
+        "deploy_mcv": 0.08641975308641975,
+        "train_infantry": 0.42592592592592593,
+        "train_vehicle": 0.29012345679012347
+      }
+    },
+    "2_poltergeist_precaptured.map::americans::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 159,
+      "stagePriors": {
+        "build": 0.06918238993710692,
+        "production": 0.18238993710691823,
+        "setup": 0.06289308176100629,
+        "tactical": 0.6855345911949685
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.2631578947368421,
+        "train_infantry": 0.2631578947368421,
+        "train_vehicle": 0.47368421052631576
+      }
+    },
+    "2_poltergeist_precaptured.map::arabs::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 192,
+      "stagePriors": {
+        "build": 0.08333333333333333,
+        "production": 0.16666666666666666,
+        "setup": 0.046875,
+        "tactical": 0.703125
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.21951219512195122,
+        "train_infantry": 0.0975609756097561,
+        "train_vehicle": 0.6829268292682927
+      }
+    },
+    "2_under_pressure.map::arabs::arabs": {
+      "replayCount": 3,
+      "totalMacroActions": 779,
+      "stagePriors": {
+        "build": 0.07445442875481387,
+        "production": 0.13350449293966624,
+        "setup": 0.03080872913992298,
+        "tactical": 0.7612323491655969
+      },
+      "templatePriors": {
+        "attack_move_center": 0.152317880794702,
+        "deploy_mcv": 0.15894039735099338,
+        "train_infantry": 0.2251655629139073,
+        "train_vehicle": 0.46357615894039733
+      }
+    },
+    "4_caverns_v410.map::americans::arabs": {
+      "replayCount": 2,
+      "totalMacroActions": 420,
+      "stagePriors": {
+        "build": 0.08095238095238096,
+        "production": 0.16666666666666666,
+        "setup": 0.04047619047619048,
+        "tactical": 0.7119047619047619
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.20238095238095238,
+        "train_infantry": 0.23809523809523808,
+        "train_vehicle": 0.5595238095238095
+      }
+    },
+    "4_caverns_v410.map::arabs::americans": {
+      "replayCount": 2,
+      "totalMacroActions": 440,
+      "stagePriors": {
+        "build": 0.056818181818181816,
+        "production": 0.12045454545454545,
+        "setup": 0.013636363636363636,
+        "tactical": 0.8090909090909091
+      },
+      "templatePriors": {
+        "attack_move_center": 0.6358024691358025,
+        "deploy_mcv": 0.037037037037037035,
+        "train_infantry": 0.06790123456790123,
+        "train_vehicle": 0.25925925925925924
+      }
+    },
+    "4_caverns_v410.map::arabs::french": {
+      "replayCount": 1,
+      "totalMacroActions": 90,
+      "stagePriors": {
+        "build": 0.07777777777777778,
+        "production": 0.2,
+        "setup": 0.05555555555555555,
+        "tactical": 0.6666666666666666
+      },
+      "templatePriors": {
+        "attack_move_center": 0.3783783783783784,
+        "deploy_mcv": 0.13513513513513514,
+        "train_infantry": 0.10810810810810811,
+        "train_vehicle": 0.3783783783783784
+      }
+    },
+    "4_caverns_v410.map::french::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 122,
+      "stagePriors": {
+        "build": 0.07377049180327869,
+        "production": 0.2786885245901639,
+        "setup": 0.06557377049180328,
+        "tactical": 0.5819672131147541
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2631578947368421,
+        "deploy_mcv": 0.14035087719298245,
+        "train_infantry": 0.10526315789473684,
+        "train_vehicle": 0.49122807017543857
+      }
+    },
+    "4_desert_island_le_v108.map::americans::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 888,
+      "stagePriors": {
+        "build": 0.03265765765765766,
+        "production": 0.14864864864864866,
+        "setup": 0.015765765765765764,
+        "tactical": 0.8029279279279279
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2512820512820513,
+        "deploy_mcv": 0.07179487179487179,
+        "train_infantry": 0.24615384615384617,
+        "train_vehicle": 0.4307692307692308
+      }
+    },
+    "4_desert_island_le_v108.map::arabs::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 438,
+      "stagePriors": {
+        "build": 0.07990867579908675,
+        "production": 0.228310502283105,
+        "setup": 0.01598173515981735,
+        "tactical": 0.6757990867579908
+      },
+      "templatePriors": {
+        "attack_move_center": 0.009259259259259259,
+        "deploy_mcv": 0.06481481481481481,
+        "train_infantry": 0.17592592592592593,
+        "train_vehicle": 0.75
+      }
+    },
+    "4_jungle_of_vietnam_le.map::americans::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 285,
+      "stagePriors": {
+        "build": 0.05263157894736842,
+        "production": 0.15087719298245614,
+        "setup": 0.05263157894736842,
+        "tactical": 0.743859649122807
+      },
+      "templatePriors": {
+        "attack_move_center": 0.610738255033557,
+        "deploy_mcv": 0.10067114093959731,
+        "train_infantry": 0.053691275167785234,
+        "train_vehicle": 0.2348993288590604
+      }
+    },
+    "4_jungle_of_vietnam_le.map::americans::british": {
+      "replayCount": 1,
+      "totalMacroActions": 414,
+      "stagePriors": {
+        "build": 0.036231884057971016,
+        "production": 0.1111111111111111,
+        "setup": 0.03140096618357488,
+        "tactical": 0.821256038647343
+      },
+      "templatePriors": {
+        "attack_move_center": 0.2976190476190476,
+        "deploy_mcv": 0.15476190476190477,
+        "train_infantry": 0.14285714285714285,
+        "train_vehicle": 0.40476190476190477
+      }
+    },
+    "4_jungle_of_vietnam_le.map::arabs::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 231,
+      "stagePriors": {
+        "build": 0.0735930735930736,
+        "production": 0.15151515151515152,
+        "setup": 0.012987012987012988,
+        "tactical": 0.7619047619047619
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.07894736842105263,
+        "train_infantry": 0.18421052631578946,
+        "train_vehicle": 0.7368421052631579
+      }
+    },
+    "4_jungle_of_vietnam_le.map::british::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 164,
+      "stagePriors": {
+        "build": 0.09146341463414634,
+        "production": 0.16463414634146342,
+        "setup": 0.012195121951219513,
+        "tactical": 0.7317073170731707
+      },
+      "templatePriors": {
+        "deploy_mcv": 0.06896551724137931,
+        "train_infantry": 0.5862068965517241,
+        "train_vehicle": 0.3448275862068966
+      }
+    },
+    "offensedefense.map::americans::arabs": {
+      "replayCount": 1,
+      "totalMacroActions": 277,
+      "stagePriors": {
+        "build": 0.05054151624548736,
+        "production": 0.20577617328519857,
+        "setup": 0.036101083032490974,
+        "tactical": 0.7075812274368231
+      },
+      "templatePriors": {
+        "attack_move_center": 0.078125,
+        "deploy_mcv": 0.15625,
+        "train_infantry": 0.421875,
+        "train_vehicle": 0.34375
+      }
+    },
+    "offensedefense.map::arabs::americans": {
+      "replayCount": 1,
+      "totalMacroActions": 144,
+      "stagePriors": {
+        "build": 0.09027777777777778,
+        "production": 0.2847222222222222,
+        "setup": 0.006944444444444444,
+        "tactical": 0.6180555555555556
+      },
+      "templatePriors": {
+        "attack_move_center": 0.19230769230769232,
+        "deploy_mcv": 0.019230769230769232,
+        "train_infantry": 0.21153846153846154,
+        "train_vehicle": 0.5769230769230769
+      }
+    },
+    "offensedefense.map::french::germans": {
+      "replayCount": 1,
+      "totalMacroActions": 108,
+      "stagePriors": {
+        "build": 0.2222222222222222,
+        "production": 0.24074074074074073,
+        "setup": 0.018518518518518517,
+        "tactical": 0.5185185185185185
+      },
+      "templatePriors": {
+        "attack_move_center": 0.3488372093023256,
+        "deploy_mcv": 0.046511627906976744,
+        "train_infantry": 0.37209302325581395,
+        "train_vehicle": 0.23255813953488372
+      }
+    },
+    "offensedefense.map::germans::french": {
+      "replayCount": 1,
+      "totalMacroActions": 77,
+      "stagePriors": {
+        "build": 0.16883116883116883,
+        "production": 0.2987012987012987,
+        "setup": 0.025974025974025976,
+        "tactical": 0.5064935064935064
+      },
+      "templatePriors": {
+        "attack_move_center": 0.4186046511627907,
+        "deploy_mcv": 0.046511627906976744,
+        "train_infantry": 0.16279069767441862,
+        "train_vehicle": 0.37209302325581395
+      }
+    }
+  }
+}

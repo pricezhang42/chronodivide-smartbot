@@ -1,0 +1,16 @@
+{
+  "replayCount": 120,
+  "totalMacroActions": 58324,
+  "stagePriors": {
+    "build": 0.06036965914546327,
+    "production": 0.17260475961868185,
+    "setup": 0.03214800082298882,
+    "tactical": 0.7348775804128661
+  },
+  "templatePriors": {
+    "attack_move_center": 0.2592405702031033,
+    "deploy_mcv": 0.11826668348681721,
+    "train_infantry": 0.2015895042260628,
+    "train_vehicle": 0.42090324208401664
+  }
+}
