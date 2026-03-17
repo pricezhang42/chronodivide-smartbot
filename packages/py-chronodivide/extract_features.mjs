@@ -12,6 +12,7 @@ function usage() {
     "                           [--player <name>] [--max-tick <n>]",
     "                           [--sample-every <n>] [--sample-ticks 1,50,100]",
     "                           [--max-entities <n>] [--spatial-size <n>]",
+    "                           [--minimap-size <n>]",
     "                           [--output <path>]",
     "",
     "Extracts SL-safe observation features from a replay.",
@@ -59,6 +60,7 @@ async function main() {
   const sampleEvery = parseIntegerArg(args["sample-every"], 50, "sample-every");
   const maxEntities = parseIntegerArg(args["max-entities"], 128, "max-entities");
   const spatialSize = parseIntegerArg(args["spatial-size"], 32, "spatial-size");
+  const minimapSize = parseIntegerArg(args["minimap-size"], 64, "minimap-size");
   const sampleTicks = parseCsvIntegerArg(args["sample-ticks"]);
   const outputPath = args.output ? String(args.output) : null;
 
@@ -97,6 +99,7 @@ async function main() {
           playerName,
           maxEntities,
           spatialSize,
+          minimapSize,
         }),
       );
     }
@@ -122,6 +125,7 @@ async function main() {
       ...getObservationFeatureSchema({
         maxEntities,
         spatialSize,
+        minimapSize,
       }),
       entityNameTokenFeature: "entity_name_token",
       objectNameVocabulary,
@@ -141,4 +145,3 @@ main().catch((error) => {
   console.error(error instanceof Error ? error.stack ?? error.message : error);
   process.exit(1);
 });
-

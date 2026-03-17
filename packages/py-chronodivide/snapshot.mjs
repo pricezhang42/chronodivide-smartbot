@@ -69,6 +69,38 @@ function differenceIds(left, right) {
   return left.filter((id) => !rightSet.has(id));
 }
 
+function splitVisibleNonEnemyHostiles(gameApi, playerName, hostileIds, enemyIds) {
+  const enemyIdSet = new Set(enemyIds);
+  const playerNames = new Set(gameApi.getPlayers());
+  const neutralUnitIds = [];
+  const otherHostileUnitIds = [];
+
+  for (const id of hostileIds) {
+    if (enemyIdSet.has(id)) {
+      continue;
+    }
+
+    const unit = gameApi.getUnitData(id) ?? gameApi.getGameObjectData(id);
+    const owner = unit?.owner;
+
+    if (!owner || !playerNames.has(owner)) {
+      neutralUnitIds.push(id);
+      continue;
+    }
+
+    if (owner === playerName || gameApi.areAlliedPlayers(playerName, owner)) {
+      continue;
+    }
+
+    otherHostileUnitIds.push(id);
+  }
+
+  return {
+    neutralUnitIds: neutralUnitIds.sort((left, right) => left - right),
+    otherHostileUnitIds: otherHostileUnitIds.sort((left, right) => left - right),
+  };
+}
+
 function uniqueSortedIds(ids) {
   return [...new Set(ids)].sort((left, right) => left - right);
 }
@@ -149,12 +181,25 @@ export function collectVisibilitySnapshot(gameApi, playerName) {
     }
   }
 
+  const selfUnitIds = gameApi.getVisibleUnits(playerName, "self").slice().sort((a, b) => a - b);
+  const alliedUnitIds = gameApi.getVisibleUnits(playerName, "allied").slice().sort((a, b) => a - b);
+  const enemyUnitIds = gameApi.getVisibleUnits(playerName, "enemy").slice().sort((a, b) => a - b);
+  const hostileUnitIds = gameApi.getVisibleUnits(playerName, "hostile").slice().sort((a, b) => a - b);
+  const { neutralUnitIds, otherHostileUnitIds } = splitVisibleNonEnemyHostiles(
+    gameApi,
+    playerName,
+    hostileUnitIds,
+    enemyUnitIds,
+  );
+
   return {
     visibleTileCount,
-    selfUnitIds: gameApi.getVisibleUnits(playerName, "self").slice().sort((a, b) => a - b),
-    alliedUnitIds: gameApi.getVisibleUnits(playerName, "allied").slice().sort((a, b) => a - b),
-    enemyUnitIds: gameApi.getVisibleUnits(playerName, "enemy").slice().sort((a, b) => a - b),
-    hostileUnitIds: gameApi.getVisibleUnits(playerName, "hostile").slice().sort((a, b) => a - b),
+    selfUnitIds,
+    alliedUnitIds,
+    enemyUnitIds,
+    hostileUnitIds,
+    neutralUnitIds,
+    otherHostileUnitIds,
   };
 }
 
@@ -166,7 +211,6 @@ export function collectPlayerObservationSnapshot(gameApi, { playerName, unitLimi
   const player = gameApi.getPlayerData(playerName);
   const visibility = collectVisibilitySnapshot(gameApi, playerName);
   const alliedOtherIds = differenceIds(visibility.alliedUnitIds, visibility.selfUnitIds);
-  const neutralOrOtherHostileIds = differenceIds(visibility.hostileUnitIds, visibility.enemyUnitIds);
 
   return {
     tick: gameApi.getCurrentTick(),
@@ -191,7 +235,8 @@ export function collectPlayerObservationSnapshot(gameApi, { playerName, unitLimi
       self: collectUnitsByIds(gameApi, visibility.selfUnitIds, unitLimit),
       allied: collectUnitsByIds(gameApi, alliedOtherIds, unitLimit),
       enemy: collectUnitsByIds(gameApi, visibility.enemyUnitIds, unitLimit),
-      neutralOrHostileOther: collectUnitsByIds(gameApi, neutralOrOtherHostileIds, unitLimit),
+      neutral: collectUnitsByIds(gameApi, visibility.neutralUnitIds, unitLimit),
+      otherHostile: collectUnitsByIds(gameApi, visibility.otherHostileUnitIds, unitLimit),
     },
   };
 }

@@ -4,7 +4,7 @@ import path from "node:path";
 import { loadGameApiBridge } from "./bridge.mjs";
 import { collectGameSnapshot, collectPlayerObservationSnapshot } from "./snapshot.mjs";
 
-const initializedDataDirs = new Set();
+const initializedDataDirsByBridge = new WeakMap();
 
 function buildReplayEventIndex(replay) {
   const replayEventsByTick = new Map();
@@ -31,6 +31,12 @@ function getMixinRules(bridge, replay) {
 
 async function initBridgeForDataDir(bridge, dataDir) {
   const resolvedDataDir = path.resolve(dataDir);
+  let initializedDataDirs = initializedDataDirsByBridge.get(bridge);
+  if (!initializedDataDirs) {
+    initializedDataDirs = new Set();
+    initializedDataDirsByBridge.set(bridge, initializedDataDirs);
+  }
+
   if (!initializedDataDirs.has(resolvedDataDir)) {
     await bridge.cdapi.init(resolvedDataDir);
     initializedDataDirs.add(resolvedDataDir);

@@ -7,7 +7,7 @@ const OBJECT_TYPE = {
   Vehicle: 7,
 };
 
-const RELATIONS = ["self", "allied", "enemy", "neutralOrHostileOther"];
+const RELATIONS = ["self", "allied", "enemy", "neutral", "otherHostile"];
 
 const SCALAR_FEATURE_NAMES = [
   "tick",
@@ -38,7 +38,8 @@ const SCALAR_FEATURE_NAMES = [
   "enemy_infantry_count",
   "enemy_vehicle_count",
   "enemy_aircraft_count",
-  "neutral_or_other_hostile_count",
+  "neutral_unit_count",
+  "other_hostile_unit_count",
   "self_purchase_value_sum",
   "enemy_visible_purchase_value_sum",
   "self_hit_points_sum",
@@ -49,7 +50,8 @@ const ENTITY_FEATURE_NAMES_BASE = [
   "relation_self",
   "relation_allied",
   "relation_enemy",
-  "relation_neutral_or_other_hostile",
+  "relation_neutral",
+  "relation_other_hostile",
   "object_aircraft",
   "object_building",
   "object_infantry",
@@ -105,15 +107,38 @@ const SPATIAL_CHANNEL_NAMES = [
   "self_presence",
   "allied_presence",
   "enemy_presence",
-  "neutral_or_other_hostile_presence",
+  "neutral_presence",
+  "other_hostile_presence",
   "self_hit_points",
   "allied_hit_points",
   "enemy_hit_points",
-  "neutral_or_other_hostile_hit_points",
+  "neutral_hit_points",
+  "other_hostile_hit_points",
   "self_mobile_presence",
   "self_building_presence",
   "enemy_mobile_presence",
   "enemy_building_presence",
+];
+
+const MINIMAP_CHANNEL_NAMES = [
+  "visible_tiles",
+  "hidden_tiles",
+  "visible_ore",
+  "visible_gems",
+  "visible_ore_spawners",
+  "self_presence",
+  "allied_presence",
+  "enemy_presence",
+  "neutral_presence",
+  "other_hostile_presence",
+  "self_building_presence",
+  "self_mobile_presence",
+  "enemy_building_presence",
+  "enemy_mobile_presence",
+  "self_hit_points",
+  "allied_hit_points",
+  "enemy_hit_points",
+  "self_start_location",
 ];
 
 function boolToNumber(value) {
@@ -181,8 +206,16 @@ function createEmptyPlane(size) {
   return Array.from({ length: size }, () => Array(size).fill(0));
 }
 
+function createPlanes(channelNames, size) {
+  return channelNames.map(() => createEmptyPlane(size));
+}
+
 function createSpatialPlanes(size) {
-  return SPATIAL_CHANNEL_NAMES.map(() => createEmptyPlane(size));
+  return createPlanes(SPATIAL_CHANNEL_NAMES, size);
+}
+
+function createMinimapPlanes(size) {
+  return createPlanes(MINIMAP_CHANNEL_NAMES, size);
 }
 
 function tileToGrid(tile, map, spatialSize) {
@@ -203,6 +236,11 @@ function tileToGrid(tile, map, spatialSize) {
 
 function incrementPlane(plane, x, y, value = 1) {
   plane[y][x] += value;
+}
+
+function markTileOnPlane(plane, tile, map, size, value = 1) {
+  const { gridX, gridY } = tileToGrid(tile, map, size);
+  incrementPlane(plane, gridX, gridY, value);
 }
 
 function aggregateRelation(units) {
@@ -285,7 +323,8 @@ function buildScalarFeatures(snapshot, aggregates) {
     aggregates.enemy.infantryCount,
     aggregates.enemy.vehicleCount,
     aggregates.enemy.aircraftCount,
-    aggregates.neutralOrHostileOther.unitCount,
+    aggregates.neutral.unitCount,
+    aggregates.otherHostile.unitCount,
     aggregates.self.purchaseValueSum,
     aggregates.enemy.purchaseValueSum,
     aggregates.self.hitPointsSum,
@@ -413,20 +452,23 @@ function buildSpatialFeatures(gameApi, snapshot, spatialSize) {
 
       if (relation === "self") {
         incrementPlane(planes[4], gridX, gridY, 1);
-        incrementPlane(planes[8], gridX, gridY, hp);
-        incrementPlane(planes[12], gridX, gridY, boolToNumber(isMobileType(unit.type)));
-        incrementPlane(planes[13], gridX, gridY, boolToNumber(unit.type === OBJECT_TYPE.Building));
-      } else if (relation === "allied") {
-        incrementPlane(planes[5], gridX, gridY, 1);
         incrementPlane(planes[9], gridX, gridY, hp);
-      } else if (relation === "enemy") {
-        incrementPlane(planes[6], gridX, gridY, 1);
-        incrementPlane(planes[10], gridX, gridY, hp);
         incrementPlane(planes[14], gridX, gridY, boolToNumber(isMobileType(unit.type)));
         incrementPlane(planes[15], gridX, gridY, boolToNumber(unit.type === OBJECT_TYPE.Building));
-      } else {
-        incrementPlane(planes[7], gridX, gridY, 1);
+      } else if (relation === "allied") {
+        incrementPlane(planes[5], gridX, gridY, 1);
+        incrementPlane(planes[10], gridX, gridY, hp);
+      } else if (relation === "enemy") {
+        incrementPlane(planes[6], gridX, gridY, 1);
         incrementPlane(planes[11], gridX, gridY, hp);
+        incrementPlane(planes[16], gridX, gridY, boolToNumber(isMobileType(unit.type)));
+        incrementPlane(planes[17], gridX, gridY, boolToNumber(unit.type === OBJECT_TYPE.Building));
+      } else if (relation === "neutral") {
+        incrementPlane(planes[7], gridX, gridY, 1);
+        incrementPlane(planes[12], gridX, gridY, hp);
+      } else {
+        incrementPlane(planes[8], gridX, gridY, 1);
+        incrementPlane(planes[13], gridX, gridY, hp);
       }
     }
   }
@@ -439,33 +481,97 @@ function buildSpatialFeatures(gameApi, snapshot, spatialSize) {
   };
 }
 
+function buildMinimapFeatures(gameApi, snapshot, minimapSize) {
+  const planes = createMinimapPlanes(minimapSize);
+  const map = gameApi.map;
+  const size = map.getRealMapSize();
+  const tiles = map.getTilesInRect({ x: 0, y: 0, width: size.width, height: size.height });
+
+  for (const tile of tiles) {
+    const tilePoint = { x: tile.rx ?? tile.x, y: tile.ry ?? tile.y };
+    if (map.isVisibleTile(tile, snapshot.player.name)) {
+      markTileOnPlane(planes[0], tilePoint, snapshot.map, minimapSize, 1);
+
+      const resource = map.getTileResourceData(tile);
+      if (resource) {
+        markTileOnPlane(planes[2], tilePoint, snapshot.map, minimapSize, safeNumber(resource.ore));
+        markTileOnPlane(planes[3], tilePoint, snapshot.map, minimapSize, safeNumber(resource.gems));
+        markTileOnPlane(planes[4], tilePoint, snapshot.map, minimapSize, boolToNumber(resource.spawnsOre));
+      }
+    } else {
+      markTileOnPlane(planes[1], tilePoint, snapshot.map, minimapSize, 1);
+    }
+  }
+
+  for (const relation of RELATIONS) {
+    for (const unit of snapshot.units[relation] ?? []) {
+      const tilePoint = unit.tile ?? { x: 0, y: 0 };
+      const hp = safeNumber(unit.hitPoints);
+
+      if (relation === "self") {
+        markTileOnPlane(planes[5], tilePoint, snapshot.map, minimapSize, 1);
+        markTileOnPlane(planes[10], tilePoint, snapshot.map, minimapSize, boolToNumber(unit.type === OBJECT_TYPE.Building));
+        markTileOnPlane(planes[11], tilePoint, snapshot.map, minimapSize, boolToNumber(isMobileType(unit.type)));
+        markTileOnPlane(planes[14], tilePoint, snapshot.map, minimapSize, hp);
+      } else if (relation === "allied") {
+        markTileOnPlane(planes[6], tilePoint, snapshot.map, minimapSize, 1);
+        markTileOnPlane(planes[15], tilePoint, snapshot.map, minimapSize, hp);
+      } else if (relation === "enemy") {
+        markTileOnPlane(planes[7], tilePoint, snapshot.map, minimapSize, 1);
+        markTileOnPlane(planes[12], tilePoint, snapshot.map, minimapSize, boolToNumber(unit.type === OBJECT_TYPE.Building));
+        markTileOnPlane(planes[13], tilePoint, snapshot.map, minimapSize, boolToNumber(isMobileType(unit.type)));
+        markTileOnPlane(planes[16], tilePoint, snapshot.map, minimapSize, hp);
+      } else if (relation === "neutral") {
+        markTileOnPlane(planes[8], tilePoint, snapshot.map, minimapSize, 1);
+      } else {
+        markTileOnPlane(planes[9], tilePoint, snapshot.map, minimapSize, 1);
+      }
+    }
+  }
+
+  if (snapshot.player.startLocation) {
+    markTileOnPlane(planes[17], snapshot.player.startLocation, snapshot.map, minimapSize, 1);
+  }
+
+  return {
+    channelNames: MINIMAP_CHANNEL_NAMES.slice(),
+    width: minimapSize,
+    height: minimapSize,
+    data: planes,
+  };
+}
+
 function aggregateSnapshot(snapshot) {
   return {
     self: aggregateRelation(snapshot.units.self ?? []),
     allied: aggregateRelation(snapshot.units.allied ?? []),
     enemy: aggregateRelation(snapshot.units.enemy ?? []),
-    neutralOrHostileOther: aggregateRelation(snapshot.units.neutralOrHostileOther ?? []),
+    neutral: aggregateRelation(snapshot.units.neutral ?? []),
+    otherHostile: aggregateRelation(snapshot.units.otherHostile ?? []),
   };
 }
 
-export function getObservationFeatureSchema({ maxEntities = 128, spatialSize = 32 } = {}) {
+export function getObservationFeatureSchema({ maxEntities = 128, spatialSize = 32, minimapSize = 64 } = {}) {
   return {
     scalarFeatureNames: SCALAR_FEATURE_NAMES.slice(),
     entityFeatureNames: ENTITY_FEATURE_NAMES_BASE.slice(),
     spatialChannelNames: SPATIAL_CHANNEL_NAMES.slice(),
+    minimapChannelNames: MINIMAP_CHANNEL_NAMES.slice(),
     maxEntities,
     spatialSize,
+    minimapSize,
     notes: [
       "All features are extracted from player-safe observation APIs.",
       "Do not replace this with getAllUnits() or enemy getPlayerData() calls for SL training data.",
       "Object-name tokens are generated per extraction run and emitted separately from the numeric entity features.",
+      "The minimap is a compact top-down tensor, not a rendered UI image.",
     ],
   };
 }
 
 export function extractObservationFeatureSample(
   gameApi,
-  { playerName, maxEntities = 128, spatialSize = 32 } = {},
+  { playerName, maxEntities = 128, spatialSize = 32, minimapSize = 64 } = {},
 ) {
   const snapshot = collectPlayerObservationSnapshot(gameApi, {
     playerName,
@@ -487,11 +593,13 @@ export function extractObservationFeatureSample(
     entityFeatures: entities.entityFeatures,
     entityMeta: entities.entityMeta,
     spatial: buildSpatialFeatures(gameApi, snapshot, spatialSize),
+    minimap: buildMinimapFeatures(gameApi, snapshot, minimapSize),
     countsByName: {
       self: sortedCountMap(aggregates.self.countsByName),
       allied: sortedCountMap(aggregates.allied.countsByName),
       enemy: sortedCountMap(aggregates.enemy.countsByName),
-      neutralOrHostileOther: sortedCountMap(aggregates.neutralOrHostileOther.countsByName),
+      neutral: sortedCountMap(aggregates.neutral.countsByName),
+      otherHostile: sortedCountMap(aggregates.otherHostile.countsByName),
     },
   };
 }

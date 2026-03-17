@@ -14,7 +14,7 @@ This phase intentionally ignores:
 
 - camera movement
 - user clicks as UI events
-- minimap image rendering
+- minimap image rendering as raw UI pixels
 
 The focus is world state and observation state that can feed training data.
 
@@ -39,9 +39,11 @@ This toolkit handles that by generating a small runtime bridge next to the insta
   - player-visible self / allied / enemy / hostile units
   - tile visibility count from fog/shroud state
 - A replay feature extractor now turns player-correct observations into SL-safe feature records:
-  - `33` scalar features
-  - `49` per-entity numeric features plus object-name tokens
-  - `16` coarse spatial channels
+  - `34` scalar features
+  - `50` per-entity numeric features plus object-name tokens
+  - `18` coarse spatial channels
+  - `18` minimap-style channels
+- A supervised dataset builder now aligns one observation tensor to one kept replay action and emits fixed-shape feature/label tensor sections in JSON.
 
 ## Files
 
@@ -58,11 +60,23 @@ This toolkit handles that by generating a small runtime bridge next to the insta
 - `observation_audit.mjs`
   CLI that checks whether observation-safe APIs behave properly and whether global APIs leak hidden enemy state.
 - `features.mjs`
-  Safe observation-to-feature encoder for scalar, entity, and spatial SL inputs.
+  Safe observation-to-feature encoder for scalar, entity, spatial, and minimap SL inputs.
 - `extract_features.mjs`
   CLI that samples a replay and writes SL-safe feature records.
 - `RA2_SL_FEATURE_SCHEMA.md`
   Notes on the current RA2 supervised-learning feature schema and caveats.
+- `sl_dataset.mjs`
+  Action-aligned supervised-learning tensor builder that combines replay observations, inferred selection state, and decoded labels.
+- `extract_sl_tensors.mjs`
+  CLI that writes one replay's supervised-learning tensor dataset as JSON.
+- `RA2_SL_TENSOR_DATASET.md`
+  Notes on the current action-aligned tensor dataset schema and caveats.
+- `labels.mjs`
+  Replay action-to-label encoder for structured SL supervision targets.
+- `extract_labels.mjs`
+  CLI that walks a replay tick-by-tick and writes action labels with inferred selection state.
+- `RA2_SL_LABEL_SCHEMA.md`
+  Notes on the current RA2 supervised-learning label schema and dataset-level action audit.
 
 ## Requirements
 
@@ -106,6 +120,7 @@ node .\packages\py-chronodivide\extract_features.mjs `
   --sample-ticks 1,1731 `
   --max-entities 128 `
   --spatial-size 32 `
+  --minimap-size 64 `
   --output .\packages\py-chronodivide\features_00758dde.json
 ```
 
@@ -116,6 +131,51 @@ This writes feature samples containing:
 - entity masks
 - object-name token IDs
 - coarse spatial planes
+- explicit minimap planes
+
+Visible hostile-but-not-enemy objects are split into `neutral` and `otherHostile` buckets using visible ownership, instead of being folded into one combined feature bucket.
+
+## Example: Extract SL Labels
+
+```powershell
+node .\packages\py-chronodivide\extract_labels.mjs `
+  --replay .\packages\chronodivide-bot-sl\ladder_replays_top50\00758dde-b725-4442-ae8f-a657069251a0.rpl `
+  --data-dir d:\workspace\ra2-headless-mix `
+  --player mecharse `
+  --max-actions 128 `
+  --output .\packages\py-chronodivide\labels_00758dde.json
+```
+
+This writes structured labels containing:
+
+- raw action id and dense action family
+- delay from previous / to next kept action
+- selection before / after action
+- selected unit ids for selection and order actions
+- order targets, queue updates, building placement, sell / repair, and super-weapon arguments
+
+## Example: Extract Action-Aligned SL Tensors
+
+```powershell
+node .\packages\py-chronodivide\extract_sl_tensors.mjs `
+  --replay .\packages\chronodivide-bot-sl\ladder_replays_top50\00758dde-b725-4442-ae8f-a657069251a0.rpl `
+  --data-dir d:\workspace\ra2-headless-mix `
+  --player mecharse `
+  --max-actions 128 `
+  --max-entities 128 `
+  --max-selected-units 64 `
+  --spatial-size 32 `
+  --minimap-size 64 `
+  --output .\packages\py-chronodivide\sl_tensors_00758dde.json
+```
+
+This writes action-aligned tensor samples containing:
+
+- observation tensors
+- inferred current-selection tensors
+- previous-action context tensors
+- decoded action-label tensors
+- schema metadata and shared vocabularies
 
 ## Example: Roundtrip Validation
 
@@ -166,7 +226,7 @@ This is why `resim.mjs` now supports `--sample-mode observation` in addition to 
 
 ## What Is Still Missing
 
-This now produces the feature side of the SL pipeline, but it does not yet produce the final `(features, labels)` tensor dataset.
+This now produces the feature side, the label side, and an action-aligned JSON tensor dataset for one replay, but it does not yet write framework-native `.pt` or `.npz` shards.
 
 What this phase does provide is the hard part:
 
@@ -175,9 +235,11 @@ What this phase does provide is the hard part:
 - state reconstruction
 - observation sampling
 - SL-safe feature extraction
+- structured action-label extraction
+- action-aligned SL tensor extraction
 
 Next steps would be:
 
-1. define the RA2 action-label schema
+1. add a multi-replay shard writer on top of the reusable `py-chronodivide` tensor API
 2. align a dataset-wide object vocabulary and normalization pass
-3. serialize replay samples plus decoded actions into final tensors
+3. serialize replay samples plus decoded actions into framework-native binary tensors when the target stack is chosen
