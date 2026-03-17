@@ -128,13 +128,14 @@ It does not include:
   - `actionTypeName -> actionTypeId`
   - action counts across the processed replay set
 
-- `[ ]` Decide the reserved ids policy.
+- `[x]` Decide the reserved ids policy.
   Recommendation:
   - `0` for first real action type if there is no unknown bucket
   - add an explicit `<unk>` id only if the transformer must support partial vocab reuse across shards
+  Current implementation uses a static SL action dict with explicit `<unk>` fallback buckets.
 
 - `[x]` Make `actionTypeId` stable across a transform run.
-  Current implementation assigns run-global ids in first-seen replay order and writes the full global vocabulary to the run manifest.
+  Current implementation assigns ids from the static `chronodivide-bot-sl/action_dict.py` vocabulary and writes counts to the run manifest.
 
 ## Phase 4: Replace The Current Canonical Label Sections
 
@@ -287,17 +288,22 @@ It does not include:
 
 ## Phase 10: Add Derived Training-Head Helpers
 
-- `[ ]` Add helper code that expands canonical labels into model-ready targets.
+- `[x]` Add helper code that expands canonical labels into model-ready targets.
+  Current implementation writes a separate `.training.pt` sidecar so the compact canonical labels remain unchanged.
 
-- `[ ]` Add helper expansion for:
+- `[x]` Add helper expansion for:
   - `delayBin -> delay one-hot`
   - `queue -> queue one-hot`
   - `unitsIndices -> selected-units target`
   - `targetEntityIndex -> entity one-hot`
   - `targetLocation -> spatial one-hot`
   - `targetLocation2 -> second spatial one-hot`
+  Current implementation also derives:
+  - `actionTypeId -> action-type one-hot`
+  - semantic masks by action type
+  - loss masks that combine semantic and replay-time resolution signals
 
-- `[ ]` Keep this expansion separate from the canonical stored layout.
+- `[x]` Keep this expansion separate from the canonical stored layout.
   That lets future model variants consume compact indices directly if they want to use embedding or cross-entropy targets.
 
 ## Phase 11: Validation
@@ -338,7 +344,7 @@ It does not include:
 
 - `[ ]` Update any schema notes that still describe `rawActionId` and `actionFamilyId` as the main training labels.
 
-- `[ ]` Add one short note to the transformer README or module docstring that explains:
+- `[x]` Add one short note to the transformer README or module docstring that explains:
   - canonical storage is compact
   - training heads are derived later
   - audit metadata remains available separately

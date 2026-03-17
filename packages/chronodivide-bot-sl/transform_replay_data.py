@@ -12,10 +12,11 @@ Current behavior:
 - iterate replay files
 - call `py-chronodivide/extract_sl_tensors.mjs` with flat tensors enabled
 - group samples by player perspective
-- derive replay-local RA2 SL V1 action-type metadata
+- derive static-dict-backed RA2 SL V1 action-type metadata
 - apply mAS-style action filtering/downsampling on the action-aligned sample stream
 - save replay-player `.pt` shards as `(features, labels)`
 - save replay-player `.sections.pt` sidecars with structured feature/label tensors
+- save replay-player `.training.pt` sidecars with model-ready derived targets and masks
 - save sidecar metadata and a run manifest
 
 Notes:
@@ -44,6 +45,15 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from action_dict import (
+    ACTION_INFO_MASK as STATIC_ACTION_INFO_MASK,
+    ACTION_TYPE_ID_TO_NAME as STATIC_ACTION_TYPE_ID_TO_NAME,
+    ACTION_TYPE_NAME_TO_ID as STATIC_ACTION_TYPE_NAME_TO_ID,
+    STATIC_ACTION_DICT_VERSION,
+    UNKNOWN_ACTION_TYPE_NAME,
+    build_observed_action_type_name,
+    canonicalize_action_type_name,
+)
 
 try:
     from tqdm import tqdm
@@ -76,6 +86,8 @@ LABEL_LAYOUT_V1_CORE_LABEL_SECTIONS = [
     "targetLocation2Valid",
     "quantity",
 ]
+FEATURE_CONTEXT_V1_VERSION = "v1"
+TRAINING_TARGETS_V1_VERSION = "v1"
 
 
 def utc_now_iso() -> str:
@@ -149,8 +161,8 @@ class TransformConfig:
 
 @dataclass
 class TransformRunState:
-    action_type_name_to_global_id: dict[str, int] = field(default_factory=dict)
     action_type_counts: dict[str, int] = field(default_factory=dict)
+    unseen_action_type_counts: dict[str, int] = field(default_factory=dict)
 
 
 def parse_args(argv: list[str]) -> TransformConfig:
@@ -317,59 +329,16 @@ def action_type_name_v1(sample: dict[str, Any], dataset: dict[str, Any]) -> str:
     legacy_label_tensors = get_legacy_label_tensors(sample)
     raw_action_id = int(legacy_label_tensors["rawActionId"][0])
     raw_action_name = get_raw_action_name(sample, dataset)
-
-    if raw_action_name == "SelectUnitsAction":
-        return "SelectUnits"
-
-    if raw_action_name == "OrderUnitsAction":
-        order_type_name = normalize_action_type_component(get_order_type_name(sample, dataset), "UnknownOrder")
-        target_mode_name = normalize_action_type_component(get_target_mode_name(sample, dataset), "none")
-        return f"Order::{order_type_name}::{target_mode_name}"
-
-    if raw_action_name == "UpdateQueueAction":
-        queue_update_type_name = normalize_action_type_component(
-            get_queue_update_type_name(sample, dataset),
-            "UnknownQueueUpdate",
-        )
-        item_name = normalize_action_type_component(
-            get_shared_name_from_token(dataset, int(legacy_label_tensors["itemNameToken"][0])),
-            "UnknownItem",
-        )
-        return f"Queue::{queue_update_type_name}::{item_name}"
-
-    if raw_action_name == "PlaceBuildingAction":
-        building_name = normalize_action_type_component(
-            get_shared_name_from_token(dataset, int(legacy_label_tensors["buildingNameToken"][0])),
-            "UnknownBuilding",
-        )
-        return f"PlaceBuilding::{building_name}"
-
-    if raw_action_name == "ActivateSuperWeaponAction":
-        super_weapon_name = normalize_action_type_component(
-            get_super_weapon_type_name(sample, dataset),
-            "UnknownSuperWeapon",
-        )
-        return f"ActivateSuperWeapon::{super_weapon_name}"
-
-    if raw_action_name == "SellObjectAction":
-        return "SellObject"
-
-    if raw_action_name == "ToggleRepairAction":
-        return "ToggleRepair"
-
-    if raw_action_name == "ResignGameAction":
-        return "ResignGame"
-
-    if raw_action_name == "NoAction":
-        return "NoAction"
-
-    if raw_action_name == "DropPlayerAction":
-        return "DropPlayer"
-
-    if raw_action_name == "PingLocationAction":
-        return "PingLocation"
-
-    return normalize_action_type_component(raw_action_name, f"RawAction_{raw_action_id}")
+    return build_observed_action_type_name(
+        raw_action_name=raw_action_name,
+        raw_action_id=raw_action_id,
+        order_type_name=get_order_type_name(sample, dataset),
+        target_mode_name=get_target_mode_name(sample, dataset),
+        queue_update_type_name=get_queue_update_type_name(sample, dataset),
+        item_name=get_shared_name_from_token(dataset, int(legacy_label_tensors["itemNameToken"][0])),
+        building_name=get_shared_name_from_token(dataset, int(legacy_label_tensors["buildingNameToken"][0])),
+        super_weapon_name=get_super_weapon_type_name(sample, dataset),
+    )
 
 
 def derive_action_type_semantic_mask(sample: dict[str, Any], dataset: dict[str, Any]) -> dict[str, bool]:
@@ -525,6 +494,54 @@ def build_v1_label_sections(legacy_label_sections: list[dict[str, Any]]) -> list
     ]
 
 
+def build_v1_feature_sections(legacy_feature_sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    feature_sections = copy.deepcopy(legacy_feature_sections)
+    for section in feature_sections:
+        if section["name"] == "lastActionContext":
+            section["shape"] = [3]
+            break
+    else:
+        raise KeyError("Feature schema is missing lastActionContext.")
+    return feature_sections
+
+
+def augment_dataset_with_feature_context_v1(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    legacy_feature_sections = copy.deepcopy(dataset["schema"]["featureSections"])
+    dataset["legacyFeatureSections"] = legacy_feature_sections
+    dataset["legacyFlatFeatureLength"] = int(dataset["schema"]["flatFeatureLength"])
+
+    dataset["featureContextV1"] = {
+        "version": FEATURE_CONTEXT_V1_VERSION,
+        "mainTensorUsesV1Only": True,
+        "lastActionContextShape": [3],
+        "lastActionContextFields": [
+            "delayFromPreviousAction",
+            "lastActionTypeIdV1",
+            "lastQueue",
+        ],
+        "notes": [
+            "This mirrors mini-AlphaStar more closely than the legacy four-value context.",
+            "Legacy feature context remains available in metadata during the migration period.",
+        ],
+    }
+
+    for sample in samples:
+        sample["legacyFeatureTensors"] = copy.deepcopy(sample["featureTensors"])
+        previous_delay = LABEL_LAYOUT_V1_MISSING_INT
+        legacy_last_action_context = sample["legacyFeatureTensors"].get("lastActionContext", [])
+        if legacy_last_action_context:
+            previous_delay = int(legacy_last_action_context[0])
+        sample["featureTensors"]["lastActionContext"] = [
+            previous_delay,
+            LABEL_LAYOUT_V1_MISSING_INT,
+            LABEL_LAYOUT_V1_MISSING_INT,
+        ]
+
+    dataset["schema"]["featureSections"] = build_v1_feature_sections(legacy_feature_sections)
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+
 def build_canonical_label_tensors_v1(sample: dict[str, Any], dataset: dict[str, Any]) -> dict[str, Any]:
     legacy_label_tensors = get_legacy_label_tensors(sample)
     derived_metadata = sample.get("derivedLabelMetadata", {})
@@ -590,54 +607,67 @@ def build_canonical_label_tensors_v1(sample: dict[str, Any], dataset: dict[str, 
 
 def build_label_layout_v1_metadata(samples: list[dict[str, Any]], dataset: dict[str, Any]) -> dict[str, Any]:
     action_type_counts: dict[str, int] = {}
-    semantic_masks: dict[str, dict[str, bool]] = {}
+    unseen_action_type_counts: dict[str, int] = {}
 
     for sample in samples:
-        action_type_name = action_type_name_v1(sample, dataset)
-        sample_mask = derive_action_type_semantic_mask(sample, dataset)
-        sample.setdefault("derivedLabelMetadata", {})["actionTypeNameV1"] = action_type_name
+        observed_action_type_name = action_type_name_v1(sample, dataset)
+        action_type_name = canonicalize_action_type_name(observed_action_type_name)
+        action_type_info = STATIC_ACTION_INFO_MASK[STATIC_ACTION_TYPE_NAME_TO_ID[action_type_name]]
+        sample_mask = {
+            "usesQueue": bool(action_type_info["usesQueue"]),
+            "usesUnits": bool(action_type_info["usesUnits"]),
+            "usesTargetEntity": bool(action_type_info["usesTargetEntity"]),
+            "usesTargetLocation": bool(action_type_info["usesTargetLocation"]),
+            "usesTargetLocation2": bool(action_type_info["usesTargetLocation2"]),
+            "usesQuantity": bool(action_type_info["usesQuantity"]),
+        }
+        sample.setdefault("derivedLabelMetadata", {})["observedActionTypeNameV1"] = observed_action_type_name
+        sample["derivedLabelMetadata"]["actionTypeNameV1"] = action_type_name
         sample["derivedLabelMetadata"]["semanticMaskV1"] = sample_mask
+        sample["derivedLabelMetadata"]["actionTypeWasKnownV1"] = observed_action_type_name == action_type_name
         action_type_counts[action_type_name] = action_type_counts.get(action_type_name, 0) + 1
-        aggregated_mask = semantic_masks.setdefault(
-            action_type_name,
-            {
-                "usesQueue": False,
-                "usesUnits": False,
-                "usesTargetEntity": False,
-                "usesTargetLocation": False,
-                "usesTargetLocation2": False,
-                "usesQuantity": False,
-            },
-        )
-        for key, value in sample_mask.items():
-            aggregated_mask[key] = aggregated_mask[key] or bool(value)
+        if action_type_name == UNKNOWN_ACTION_TYPE_NAME and observed_action_type_name != UNKNOWN_ACTION_TYPE_NAME:
+            unseen_action_type_counts[observed_action_type_name] = unseen_action_type_counts.get(observed_action_type_name, 0) + 1
 
-    action_type_names = sorted(action_type_counts)
-    action_type_name_to_id = {name: index for index, name in enumerate(action_type_names)}
     action_type_vocabulary = []
-    for name in action_type_names:
+    for action_type_id, name in STATIC_ACTION_TYPE_ID_TO_NAME.items():
+        action_type_info = STATIC_ACTION_INFO_MASK[action_type_id]
         action_type_vocabulary.append(
             {
-                "id": action_type_name_to_id[name],
+                "id": action_type_id,
                 "name": name,
-                "count": action_type_counts[name],
-                "semanticMask": semantic_masks[name],
+                "count": action_type_counts.get(name, 0),
+                "semanticMask": {
+                    "usesQueue": bool(action_type_info["usesQueue"]),
+                    "usesUnits": bool(action_type_info["usesUnits"]),
+                    "usesTargetEntity": bool(action_type_info["usesTargetEntity"]),
+                    "usesTargetLocation": bool(action_type_info["usesTargetLocation"]),
+                    "usesTargetLocation2": bool(action_type_info["usesTargetLocation2"]),
+                    "usesQuantity": bool(action_type_info["usesQuantity"]),
+                },
+                "family": action_type_info["family"],
+                "observedInDataset": bool(action_type_counts.get(name, 0)),
             }
         )
 
     return {
         "version": LABEL_LAYOUT_V1_VERSION,
-        "status": "phase_1_and_3_started",
-        "scope": LABEL_LAYOUT_V1_ACTION_VOCAB_SCOPE,
+        "status": "static_action_dict",
+        "scope": "static_v1",
         "mainTensorUsesV1Only": False,
         "delayBins": LABEL_LAYOUT_V1_DELAY_BINS,
         "missingInt": LABEL_LAYOUT_V1_MISSING_INT,
         "coreLabelSections": LABEL_LAYOUT_V1_CORE_LABEL_SECTIONS,
+        "staticActionDictVersion": STATIC_ACTION_DICT_VERSION,
         "actionTypeVocabulary": action_type_vocabulary,
-        "actionTypeNameToId": action_type_name_to_id,
+        "actionTypeNameToId": dict(STATIC_ACTION_TYPE_NAME_TO_ID),
+        "unseenObservedActionTypes": [
+            {"name": name, "count": count}
+            for name, count in sorted(unseen_action_type_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
         "notes": [
-            "This is the first V1 implementation step: fine-grained action types and delay bins are derived in chronodivide-bot-sl.",
-            "ActionTypeId is replay-local for now because the transformer does not yet build a run-global vocabulary before writing shards.",
+            "ActionTypeId is assigned from the static chronodivide-bot-sl action dict, not replay order.",
+            "Unknown concrete queue items, buildings, or super-weapon names fall back to explicit <unk> action buckets.",
             "Legacy coarse label sections are still preserved during the migration period.",
         ],
     }
@@ -653,13 +683,33 @@ def augment_dataset_with_label_layout_v1(dataset: dict[str, Any]) -> None:
         dataset["labelLayoutV1"] = {
             "version": LABEL_LAYOUT_V1_VERSION,
             "status": "empty",
-            "scope": LABEL_LAYOUT_V1_ACTION_VOCAB_SCOPE,
+            "scope": "static_v1",
             "mainTensorUsesV1Only": True,
             "delayBins": LABEL_LAYOUT_V1_DELAY_BINS,
             "missingInt": LABEL_LAYOUT_V1_MISSING_INT,
             "coreLabelSections": LABEL_LAYOUT_V1_CORE_LABEL_SECTIONS,
-            "actionTypeVocabulary": [],
-            "actionTypeNameToId": {},
+            "staticActionDictVersion": STATIC_ACTION_DICT_VERSION,
+            "actionTypeVocabulary": [
+                {
+                    "id": action_type_id,
+                    "name": action_type_name,
+                    "count": 0,
+                    "semanticMask": {
+                        "usesQueue": bool(action_type_info["usesQueue"]),
+                        "usesUnits": bool(action_type_info["usesUnits"]),
+                        "usesTargetEntity": bool(action_type_info["usesTargetEntity"]),
+                        "usesTargetLocation": bool(action_type_info["usesTargetLocation"]),
+                        "usesTargetLocation2": bool(action_type_info["usesTargetLocation2"]),
+                        "usesQuantity": bool(action_type_info["usesQuantity"]),
+                    },
+                    "family": action_type_info["family"],
+                    "observedInDataset": False,
+                }
+                for action_type_id, action_type_name in STATIC_ACTION_TYPE_ID_TO_NAME.items()
+                for action_type_info in [STATIC_ACTION_INFO_MASK[action_type_id]]
+            ],
+            "actionTypeNameToId": dict(STATIC_ACTION_TYPE_NAME_TO_ID),
+            "unseenObservedActionTypes": [],
         }
         dataset["schema"]["labelSections"] = build_v1_label_sections(legacy_label_sections)
         dataset["schema"]["flatLabelLength"] = compute_flat_length(dataset["schema"]["labelSections"])
@@ -683,53 +733,411 @@ def register_dataset_action_types_globally(dataset: dict[str, Any], run_state: T
     if not label_layout_v1:
         return
 
-    local_vocabulary = copy.deepcopy(label_layout_v1.get("actionTypeVocabulary", []))
-    local_name_to_id = dict(label_layout_v1.get("actionTypeNameToId", {}))
-    label_layout_v1["localActionTypeVocabulary"] = local_vocabulary
-    label_layout_v1["localActionTypeNameToId"] = local_name_to_id
-
-    updated_vocabulary: list[dict[str, Any]] = []
-    for entry in local_vocabulary:
-        action_type_name = str(entry["name"])
-        if action_type_name not in run_state.action_type_name_to_global_id:
-            run_state.action_type_name_to_global_id[action_type_name] = len(run_state.action_type_name_to_global_id)
-        global_id = run_state.action_type_name_to_global_id[action_type_name]
-        run_state.action_type_counts[action_type_name] = run_state.action_type_counts.get(action_type_name, 0) + int(
-            entry.get("count", 0)
-        )
-
-        updated_entry = copy.deepcopy(entry)
-        updated_entry["localId"] = int(entry["id"])
-        updated_entry["id"] = global_id
-        updated_entry["globalId"] = global_id
-        updated_vocabulary.append(updated_entry)
-
     for sample in dataset.get("samples", []):
         action_type_name = sample.get("derivedLabelMetadata", {}).get("actionTypeNameV1")
         if not isinstance(action_type_name, str):
             continue
-        global_id = run_state.action_type_name_to_global_id[action_type_name]
+        global_id = STATIC_ACTION_TYPE_NAME_TO_ID[action_type_name]
+        run_state.action_type_counts[action_type_name] = run_state.action_type_counts.get(action_type_name, 0) + 1
+        observed_action_type_name = sample.get("derivedLabelMetadata", {}).get("observedActionTypeNameV1")
+        if (
+            isinstance(observed_action_type_name, str)
+            and observed_action_type_name != action_type_name
+            and action_type_name == UNKNOWN_ACTION_TYPE_NAME
+        ):
+            run_state.unseen_action_type_counts[observed_action_type_name] = (
+                run_state.unseen_action_type_counts.get(observed_action_type_name, 0) + 1
+            )
         sample["derivedLabelMetadata"]["globalActionTypeIdV1"] = global_id
         sample["labelTensors"]["actionTypeId"] = [global_id]
 
-    label_layout_v1["scope"] = "run_global"
-    label_layout_v1["actionTypeVocabulary"] = updated_vocabulary
-    label_layout_v1["actionTypeNameToId"] = dict(run_state.action_type_name_to_global_id)
+    label_layout_v1["scope"] = "static_v1"
+    label_layout_v1["actionTypeNameToId"] = dict(STATIC_ACTION_TYPE_NAME_TO_ID)
     label_layout_v1.setdefault("notes", []).append(
-        "Saved actionTypeId values use run-global ids assigned in first-seen replay order across this transform run."
+        "Saved actionTypeId values use the static chronodivide-bot-sl action dict."
     )
 
 
 def build_global_action_type_vocabulary(run_state: TransformRunState) -> list[dict[str, Any]]:
-    ordered_names = sorted(run_state.action_type_name_to_global_id.items(), key=lambda item: item[1])
     return [
         {
             "id": action_type_id,
             "name": action_type_name,
             "count": run_state.action_type_counts.get(action_type_name, 0),
+            "family": STATIC_ACTION_INFO_MASK[action_type_id]["family"],
         }
-        for action_type_name, action_type_id in ordered_names
+        for action_type_id, action_type_name in STATIC_ACTION_TYPE_ID_TO_NAME.items()
     ]
+
+
+def get_observation_scalar_index(schema: dict[str, Any], feature_name: str) -> int:
+    scalar_feature_names = schema.get("observation", {}).get("scalarFeatureNames", [])
+    if feature_name not in scalar_feature_names:
+        raise KeyError(f"Observation scalar feature not found in schema: {feature_name}")
+    return int(scalar_feature_names.index(feature_name))
+
+
+def build_training_target_sections(
+    *,
+    action_vocab_size: int,
+    delay_bins: int,
+    max_selected_units: int,
+    max_entities: int,
+    spatial_size: int,
+) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "targetSections": [
+            {"name": "actionTypeOneHot", "shape": [action_vocab_size], "dtype": "int32"},
+            {"name": "delayOneHot", "shape": [delay_bins], "dtype": "int32"},
+            {"name": "queueOneHot", "shape": [2], "dtype": "int32"},
+            {"name": "unitsOneHot", "shape": [max_selected_units, max_entities], "dtype": "int32"},
+            {"name": "targetEntityOneHot", "shape": [max_entities], "dtype": "int32"},
+            {"name": "targetLocationOneHot", "shape": [spatial_size, spatial_size], "dtype": "int32"},
+            {"name": "targetLocation2OneHot", "shape": [spatial_size, spatial_size], "dtype": "int32"},
+            {"name": "quantityValue", "shape": [1], "dtype": "int32"},
+        ],
+        "maskSections": [
+            {"name": "actionTypeLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "delayLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "queueSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "unitsSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetEntitySemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocationSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocation2SemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "quantitySemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "queueLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "unitsSequenceMask", "shape": [max_selected_units], "dtype": "int32"},
+            {"name": "unitsResolvedMask", "shape": [max_selected_units], "dtype": "int32"},
+            {"name": "unitsLossMask", "shape": [max_selected_units], "dtype": "int32"},
+            {"name": "targetEntityResolvedMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetEntityLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocationValidMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocationLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocation2ValidMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocation2LossMask", "shape": [1], "dtype": "int32"},
+            {"name": "quantityLossMask", "shape": [1], "dtype": "int32"},
+        ],
+    }
+
+
+def build_action_type_semantic_lookup(label_layout_v1: dict[str, Any]) -> dict[int, dict[str, bool]]:
+    lookup: dict[int, dict[str, bool]] = {}
+    for entry in label_layout_v1.get("actionTypeVocabulary", []):
+        action_type_id = int(entry["id"])
+        semantic_mask = entry.get("semanticMask", {})
+        lookup[action_type_id] = {
+            "usesQueue": bool(semantic_mask.get("usesQueue", False)),
+            "usesUnits": bool(semantic_mask.get("usesUnits", False)),
+            "usesTargetEntity": bool(semantic_mask.get("usesTargetEntity", False)),
+            "usesTargetLocation": bool(semantic_mask.get("usesTargetLocation", False)),
+            "usesTargetLocation2": bool(semantic_mask.get("usesTargetLocation2", False)),
+            "usesQuantity": bool(semantic_mask.get("usesQuantity", False)),
+        }
+    return lookup
+
+
+def build_semantic_mask_tensor(
+    action_type_ids: torch.Tensor,
+    semantic_lookup: dict[int, dict[str, bool]],
+    semantic_key: str,
+) -> torch.Tensor:
+    rows = [
+        [1 if semantic_lookup.get(int(action_type_id), {}).get(semantic_key, False) else 0]
+        for action_type_id in action_type_ids.tolist()
+    ]
+    return torch.tensor(rows, dtype=torch.int32)
+
+
+def build_one_hot_matrix(indices: torch.Tensor, size: int) -> torch.Tensor:
+    one_hot = torch.zeros((indices.shape[0], size), dtype=torch.int32)
+    valid_mask = (indices >= 0) & (indices < size)
+    if torch.any(valid_mask):
+        rows = torch.nonzero(valid_mask, as_tuple=False).squeeze(1)
+        one_hot[rows, indices[valid_mask].to(torch.long)] = 1
+    return one_hot
+
+
+def build_one_hot_sequence(indices: torch.Tensor, size: int) -> torch.Tensor:
+    batch_size, sequence_length = indices.shape
+    one_hot = torch.zeros((batch_size, sequence_length, size), dtype=torch.int32)
+    valid_mask = (indices >= 0) & (indices < size)
+    if torch.any(valid_mask):
+        positions = torch.nonzero(valid_mask, as_tuple=False)
+        one_hot[
+            positions[:, 0],
+            positions[:, 1],
+            indices[valid_mask].to(torch.long),
+        ] = 1
+    return one_hot
+
+
+def tile_to_grid_indices(
+    tile_locations: torch.Tensor,
+    map_widths: torch.Tensor,
+    map_heights: torch.Tensor,
+    spatial_size: int,
+) -> torch.Tensor:
+    x_values = tile_locations[:, 0].to(torch.float32)
+    y_values = tile_locations[:, 1].to(torch.float32)
+    max_x = torch.clamp(map_widths.to(torch.float32) - 1.0, min=1.0)
+    max_y = torch.clamp(map_heights.to(torch.float32) - 1.0, min=1.0)
+    normalized_x = torch.clamp(x_values / max_x, min=0.0, max=1.0)
+    normalized_y = torch.clamp(y_values / max_y, min=0.0, max=1.0)
+    grid_x = torch.clamp(torch.floor(normalized_x * spatial_size).to(torch.int64), min=0, max=spatial_size - 1)
+    grid_y = torch.clamp(torch.floor(normalized_y * spatial_size).to(torch.int64), min=0, max=spatial_size - 1)
+    return torch.stack((grid_x, grid_y), dim=1)
+
+
+def build_spatial_one_hot(
+    tile_locations: torch.Tensor,
+    valid_mask: torch.Tensor,
+    map_widths: torch.Tensor,
+    map_heights: torch.Tensor,
+    spatial_size: int,
+) -> torch.Tensor:
+    batch_size = tile_locations.shape[0]
+    one_hot = torch.zeros((batch_size, spatial_size, spatial_size), dtype=torch.int32)
+    effective_valid_mask = (
+        (valid_mask.squeeze(1) > 0)
+        & (tile_locations[:, 0] >= 0)
+        & (tile_locations[:, 1] >= 0)
+    )
+    if torch.any(effective_valid_mask):
+        grid_locations = tile_to_grid_indices(
+            tile_locations[effective_valid_mask],
+            map_widths[effective_valid_mask],
+            map_heights[effective_valid_mask],
+            spatial_size,
+        )
+        rows = torch.nonzero(effective_valid_mask, as_tuple=False).squeeze(1)
+        one_hot[rows, grid_locations[:, 1], grid_locations[:, 0]] = 1
+    return one_hot
+
+
+def validate_tensor_section_shapes(
+    tensor_sections: dict[str, torch.Tensor],
+    schema_sections: list[dict[str, Any]],
+    artifact_name: str,
+    replay_name: str,
+    player_name: str,
+    sample_count: int,
+) -> None:
+    for section in schema_sections:
+        section_name = str(section["name"])
+        if section_name not in tensor_sections:
+            raise ValueError(f"{replay_name}/{player_name} is missing {artifact_name}.{section_name}.")
+        expected_shape = (sample_count, *tuple(int(dimension) for dimension in section["shape"]))
+        observed_shape = tuple(int(dimension) for dimension in tensor_sections[section_name].shape)
+        if observed_shape != expected_shape:
+            raise ValueError(
+                f"{replay_name}/{player_name} has shape {observed_shape} for {artifact_name}.{section_name}, "
+                f"expected {expected_shape}."
+            )
+
+
+def build_training_targets_v1(
+    feature_section_tensors: dict[str, torch.Tensor],
+    label_section_tensors: dict[str, torch.Tensor],
+    metadata: dict[str, Any],
+    global_action_vocabulary: list[dict[str, Any]],
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, Any]]:
+    schema = metadata["schema"]
+    label_layout_v1 = metadata.get("labelLayoutV1", {})
+    semantic_lookup = build_action_type_semantic_lookup(label_layout_v1)
+    action_vocab_size = len(global_action_vocabulary)
+    delay_bins = int(label_layout_v1.get("delayBins", LABEL_LAYOUT_V1_DELAY_BINS))
+    spatial_size = int(schema["observation"]["spatialSize"])
+    max_entities = int(schema["observation"]["maxEntities"])
+    max_selected_units = int(label_section_tensors["unitsIndices"].shape[1])
+    sample_count = int(label_section_tensors["actionTypeId"].shape[0])
+    scalar_tensor = feature_section_tensors["scalar"]
+    map_width_index = get_observation_scalar_index(schema, "map_width")
+    map_height_index = get_observation_scalar_index(schema, "map_height")
+    map_widths = scalar_tensor[:, map_width_index]
+    map_heights = scalar_tensor[:, map_height_index]
+
+    action_type_ids = label_section_tensors["actionTypeId"].squeeze(1).to(torch.int64)
+    delay_bins_tensor = label_section_tensors["delayBin"].squeeze(1).to(torch.int64)
+    queue_tensor = label_section_tensors["queue"].squeeze(1).to(torch.int64)
+    units_indices = label_section_tensors["unitsIndices"].to(torch.int64)
+    units_sequence_mask = label_section_tensors["unitsMask"].to(torch.int32)
+    units_resolved_mask = label_section_tensors["unitsResolvedMask"].to(torch.int32)
+    target_entity_indices = label_section_tensors["targetEntityIndex"].squeeze(1).to(torch.int64)
+    target_entity_resolved = label_section_tensors["targetEntityResolved"].to(torch.int32)
+    target_location = label_section_tensors["targetLocation"].to(torch.int64)
+    target_location_valid = label_section_tensors["targetLocationValid"].to(torch.int32)
+    target_location_2 = label_section_tensors["targetLocation2"].to(torch.int64)
+    target_location_2_valid = label_section_tensors["targetLocation2Valid"].to(torch.int32)
+    quantity_value = label_section_tensors["quantity"].to(torch.int32)
+
+    action_type_one_hot = build_one_hot_matrix(action_type_ids, action_vocab_size)
+    delay_one_hot = build_one_hot_matrix(delay_bins_tensor, delay_bins)
+    queue_one_hot = build_one_hot_matrix(queue_tensor, 2)
+    units_one_hot = build_one_hot_sequence(units_indices, max_entities)
+    target_entity_one_hot = build_one_hot_matrix(target_entity_indices, max_entities)
+    target_location_one_hot = build_spatial_one_hot(
+        target_location,
+        target_location_valid,
+        map_widths,
+        map_heights,
+        spatial_size,
+    )
+    target_location_2_one_hot = build_spatial_one_hot(
+        target_location_2,
+        target_location_2_valid,
+        map_widths,
+        map_heights,
+        spatial_size,
+    )
+
+    queue_semantic_mask = build_semantic_mask_tensor(action_type_ids, semantic_lookup, "usesQueue")
+    units_semantic_mask = build_semantic_mask_tensor(action_type_ids, semantic_lookup, "usesUnits")
+    target_entity_semantic_mask = build_semantic_mask_tensor(action_type_ids, semantic_lookup, "usesTargetEntity")
+    target_location_semantic_mask = build_semantic_mask_tensor(action_type_ids, semantic_lookup, "usesTargetLocation")
+    target_location_2_semantic_mask = build_semantic_mask_tensor(
+        action_type_ids,
+        semantic_lookup,
+        "usesTargetLocation2",
+    )
+    quantity_semantic_mask = build_semantic_mask_tensor(action_type_ids, semantic_lookup, "usesQuantity")
+
+    action_type_loss_mask = ((action_type_ids >= 0) & (action_type_ids < action_vocab_size)).to(torch.int32).unsqueeze(1)
+    delay_loss_mask = ((delay_bins_tensor >= 0) & (delay_bins_tensor < delay_bins)).to(torch.int32).unsqueeze(1)
+    queue_loss_mask = queue_semantic_mask * ((queue_tensor >= 0) & (queue_tensor < 2)).to(torch.int32).unsqueeze(1)
+    units_loss_mask = units_semantic_mask * units_sequence_mask * units_resolved_mask
+    target_entity_loss_mask = target_entity_semantic_mask * target_entity_resolved
+    target_location_loss_mask = target_location_semantic_mask * target_location_valid
+    target_location_2_loss_mask = target_location_2_semantic_mask * target_location_2_valid
+    quantity_loss_mask = quantity_semantic_mask * (quantity_value >= 0).to(torch.int32)
+
+    training_targets = {
+        "actionTypeOneHot": action_type_one_hot,
+        "delayOneHot": delay_one_hot,
+        "queueOneHot": queue_one_hot,
+        "unitsOneHot": units_one_hot,
+        "targetEntityOneHot": target_entity_one_hot,
+        "targetLocationOneHot": target_location_one_hot,
+        "targetLocation2OneHot": target_location_2_one_hot,
+        "quantityValue": quantity_value,
+    }
+    training_masks = {
+        "actionTypeLossMask": action_type_loss_mask,
+        "delayLossMask": delay_loss_mask,
+        "queueSemanticMask": queue_semantic_mask,
+        "unitsSemanticMask": units_semantic_mask,
+        "targetEntitySemanticMask": target_entity_semantic_mask,
+        "targetLocationSemanticMask": target_location_semantic_mask,
+        "targetLocation2SemanticMask": target_location_2_semantic_mask,
+        "quantitySemanticMask": quantity_semantic_mask,
+        "queueLossMask": queue_loss_mask,
+        "unitsSequenceMask": units_sequence_mask,
+        "unitsResolvedMask": units_resolved_mask,
+        "unitsLossMask": units_loss_mask,
+        "targetEntityResolvedMask": target_entity_resolved,
+        "targetEntityLossMask": target_entity_loss_mask,
+        "targetLocationValidMask": target_location_valid,
+        "targetLocationLossMask": target_location_loss_mask,
+        "targetLocation2ValidMask": target_location_2_valid,
+        "targetLocation2LossMask": target_location_2_loss_mask,
+        "quantityLossMask": quantity_loss_mask,
+    }
+
+    training_schema = {
+        "version": TRAINING_TARGETS_V1_VERSION,
+        "sourceCanonicalLabelVersion": LABEL_LAYOUT_V1_VERSION,
+        "actionVocabularySize": action_vocab_size,
+        "delayBins": delay_bins,
+        "maxEntities": max_entities,
+        "maxSelectedUnits": max_selected_units,
+        "spatialSize": spatial_size,
+        **build_training_target_sections(
+            action_vocab_size=action_vocab_size,
+            delay_bins=delay_bins,
+            max_selected_units=max_selected_units,
+            max_entities=max_entities,
+            spatial_size=spatial_size,
+        ),
+        "notes": [
+            "This sidecar expands compact canonical V1 labels into model-ready targets and masks.",
+            "Action-type one-hot uses the run-global action vocabulary from the transform manifest.",
+            "Spatial one-hot targets reuse the same tile-to-grid mapping as py-chronodivide features.",
+            "Canonical labels remain the source of truth; these tensors are derived for training convenience.",
+        ],
+    }
+
+    replay_name = Path(str(metadata["replay"]["path"])).name
+    player_name = str(metadata["playerName"])
+    validate_tensor_section_shapes(
+        training_targets,
+        training_schema["targetSections"],
+        "trainingTargets",
+        replay_name,
+        player_name,
+        sample_count,
+    )
+    validate_tensor_section_shapes(
+        training_masks,
+        training_schema["maskSections"],
+        "trainingMasks",
+        replay_name,
+        player_name,
+        sample_count,
+    )
+    return training_targets, training_masks, training_schema
+
+
+def finalize_training_target_sidecars(
+    config: TransformConfig,
+    results: list[dict[str, Any]],
+    global_action_vocabulary: list[dict[str, Any]],
+) -> None:
+    for result in results:
+        if result.get("status") not in {"saved", "skipped"}:
+            continue
+        structured_tensor_path = result.get("structuredTensorPath")
+        metadata_path = result.get("metadataPath")
+        if not structured_tensor_path or not metadata_path:
+            continue
+
+        structured_path = Path(str(structured_tensor_path))
+        metadata_file = Path(str(metadata_path))
+        if not structured_path.exists() or not metadata_file.exists():
+            continue
+
+        training_tensor_path = Path(str(result["tensorPath"])).with_suffix(".training.pt")
+        should_write_training = config.overwrite or not training_tensor_path.exists()
+
+        if should_write_training:
+            structured_payload = torch.load(structured_path, map_location="cpu", weights_only=True)
+            with metadata_file.open("r", encoding="utf-8") as handle:
+                metadata = json.load(handle)
+
+            training_targets, training_masks, training_schema = build_training_targets_v1(
+                structured_payload["featureTensors"],
+                structured_payload["labelTensors"],
+                metadata,
+                global_action_vocabulary,
+            )
+            torch.save(
+                {
+                    "trainingTargets": training_targets,
+                    "trainingMasks": training_masks,
+                    "sampleContext": structured_payload.get("sampleContext", {}),
+                },
+                training_tensor_path,
+            )
+            metadata["trainingTargetTensorPath"] = str(training_tensor_path)
+            metadata["trainingTargetsV1"] = training_schema
+            metadata["structuredTrainingTargetShapes"] = {
+                name: list(tensor.shape) for name, tensor in training_targets.items()
+            }
+            metadata["structuredTrainingMaskShapes"] = {
+                name: list(tensor.shape) for name, tensor in training_masks.items()
+            }
+            with metadata_file.open("w", encoding="utf-8") as handle:
+                json.dump(metadata, handle, indent=2)
+
+        result["trainingTargetTensorPath"] = str(training_tensor_path)
 
 
 def stable_keep_fraction(
@@ -1116,8 +1524,7 @@ def rebuild_flat_tensor(sample: dict[str, Any], schema_sections: list[dict[str, 
 
 def rewrite_temporal_context(samples: list[dict[str, Any]]) -> None:
     previous_tick: int | None = None
-    previous_raw_action_id = -1
-    previous_action_family_id = -1
+    previous_action_type_id_v1 = -1
     previous_queue = -1
 
     for sample in samples:
@@ -1126,14 +1533,12 @@ def rewrite_temporal_context(samples: list[dict[str, Any]]) -> None:
         delay_from_previous = -1 if previous_tick is None else current_tick - previous_tick
         sample["featureTensors"]["lastActionContext"] = [
             delay_from_previous,
-            previous_raw_action_id,
-            previous_action_family_id,
+            previous_action_type_id_v1,
             previous_queue,
         ]
 
         previous_tick = current_tick
-        previous_raw_action_id = int(legacy_label_tensors["rawActionId"][0])
-        previous_action_family_id = int(legacy_label_tensors["actionFamilyId"][0])
+        previous_action_type_id_v1 = int(sample["labelTensors"]["actionTypeId"][0])
         previous_queue = int(legacy_label_tensors["queue"][0])
 
     for index, sample in enumerate(samples):
@@ -1294,6 +1699,10 @@ def write_player_shard(
         "featureDType": str(features.dtype),
         "labelDType": str(labels.dtype),
         "schema": dataset["schema"],
+        "legacyFeatureSchema": {
+            "featureSections": dataset.get("legacyFeatureSections", []),
+            "flatFeatureLength": dataset.get("legacyFlatFeatureLength"),
+        },
         "legacyLabelSchema": {
             "labelSections": dataset.get("legacyLabelSections", []),
             "flatLabelLength": dataset.get("legacyFlatLabelLength"),
@@ -1314,6 +1723,7 @@ def write_player_shard(
         "playerCounts": player_counts,
         "actionFilter": filter_stats,
         "filterConfig": dataset["filterConfig"],
+        "featureContextV1": dataset.get("featureContextV1"),
         "labelLayoutV1": dataset.get("labelLayoutV1"),
         "tensorPath": str(tensor_path),
         "structuredTensorPath": str(structured_tensor_path),
@@ -1341,6 +1751,7 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
     dataset = run_py_chronodivide_extract(config, replay_path)
     augment_dataset_with_label_layout_v1(dataset)
     register_dataset_action_types_globally(dataset, run_state)
+    augment_dataset_with_feature_context_v1(dataset)
     dataset["filterConfig"] = build_filter_config(config)
     grouped_samples = group_samples_by_player(dataset.get("samples", []))
     if not grouped_samples:
@@ -1402,9 +1813,15 @@ def write_manifest(
         "replayCount": len(replay_paths),
         "savedShardCount": sum(1 for result in results if result["status"] == "saved"),
         "skippedShardCount": sum(1 for result in results if result["status"] == "skipped"),
+        "trainingTargetShardCount": sum(1 for result in results if result.get("trainingTargetTensorPath")),
         "emptyReplayCount": sum(1 for result in results if result["status"] == "empty"),
         "errorCount": len(errors),
+        "staticActionDictVersion": STATIC_ACTION_DICT_VERSION,
         "labelLayoutV1GlobalActionVocabulary": build_global_action_type_vocabulary(run_state),
+        "unseenObservedActionTypes": [
+            {"name": name, "count": count}
+            for name, count in sorted(run_state.unseen_action_type_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
         "results": results,
         "errors": errors,
     }
@@ -1443,9 +1860,11 @@ def main(argv: list[str]) -> int:
             if config.fail_fast:
                 raise
 
+    finalize_training_target_sidecars(config, results, build_global_action_type_vocabulary(run_state))
     manifest_path = write_manifest(config, replay_paths, results, errors, run_state)
     print(f"Processed {len(replay_paths)} replay(s).")
     print(f"Saved {sum(1 for result in results if result['status'] == 'saved')} shard(s).")
+    print(f"Training targets: {sum(1 for result in results if result.get('trainingTargetTensorPath'))} shard(s).")
     print(f"Manifest: {manifest_path}")
 
     if errors:

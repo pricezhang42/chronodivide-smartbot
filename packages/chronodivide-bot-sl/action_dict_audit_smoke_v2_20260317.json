@@ -1,0 +1,2208 @@
+{
+  "createdAt": "2026-03-17T22:19:32.364075+00:00",
+  "config": {
+    "replay_dir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50",
+    "output_path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\action_dict_audit_smoke_v2_20260317.json",
+    "data_dir": "D:\\workspace\\ra2-headless-mix",
+    "py_chronodivide_script": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\py-chronodivide\\extract_action_labels.mjs",
+    "replay_glob": "*.rpl",
+    "replay_start": 0,
+    "max_replays": 5,
+    "player": "all",
+    "include_no_action": false,
+    "include_ui_actions": false,
+    "max_actions": null,
+    "max_tick": null,
+    "overwrite": true,
+    "fail_fast": false
+  },
+  "staticActionDictVersion": "ra2_sl_v2",
+  "replayCount": 5,
+  "processedReplayCount": 5,
+  "errorCount": 0,
+  "summary": {
+    "totalActionCount": 2938,
+    "fallbackActionCount": 42,
+    "exactActionCount": 2896,
+    "fallbackRate": 0.014295439074200136,
+    "observedActionTypes": [
+      {
+        "name": "SelectUnits",
+        "count": 1322
+      },
+      {
+        "name": "Order::Move::tile",
+        "count": 609
+      },
+      {
+        "name": "Queue::Add::HTNK",
+        "count": 88
+      },
+      {
+        "name": "Order::Attack::object",
+        "count": 70
+      },
+      {
+        "name": "Order::Move::ore_tile",
+        "count": 68
+      },
+      {
+        "name": "Order::AttackMove::tile",
+        "count": 64
+      },
+      {
+        "name": "Order::DeploySelected::none",
+        "count": 61
+      },
+      {
+        "name": "Queue::Add::MTNK",
+        "count": 52
+      },
+      {
+        "name": "Order::Attack::none",
+        "count": 36
+      },
+      {
+        "name": "Queue::Hold::UnknownItem",
+        "count": 33
+      },
+      {
+        "name": "Order::ForceMove::object",
+        "count": 28
+      },
+      {
+        "name": "Queue::Add::DOG",
+        "count": 17
+      },
+      {
+        "name": "Queue::Add::GAPOWR",
+        "count": 16
+      },
+      {
+        "name": "Queue::Add::GAPILL",
+        "count": 16
+      },
+      {
+        "name": "Queue::Add::JUMPJET",
+        "count": 15
+      },
+      {
+        "name": "Queue::Add::NAREFN",
+        "count": 15
+      },
+      {
+        "name": "PlaceBuilding::GAPILL",
+        "count": 15
+      },
+      {
+        "name": "ActivateSuperWeapon::ParaDrop",
+        "count": 14
+      },
+      {
+        "name": "Queue::Add::HTK",
+        "count": 14
+      },
+      {
+        "name": "Queue::Add::GAREFN",
+        "count": 14
+      },
+      {
+        "name": "PlaceBuilding::NAREFN",
+        "count": 14
+      },
+      {
+        "name": "PlaceBuilding::GAREFN",
+        "count": 13
+      },
+      {
+        "name": "PlaceBuilding::GAPOWR",
+        "count": 12
+      },
+      {
+        "name": "Queue::Add::NAPOWR",
+        "count": 12
+      },
+      {
+        "name": "Queue::Add::ADOG",
+        "count": 12
+      },
+      {
+        "name": "Order::Occupy::object",
+        "count": 12
+      },
+      {
+        "name": "Queue::Add::MGTK",
+        "count": 11
+      },
+      {
+        "name": "Order::Gather::ore_tile",
+        "count": 11
+      },
+      {
+        "name": "Queue::Add::E2",
+        "count": 11
+      },
+      {
+        "name": "Queue::Add::GAWEAP",
+        "count": 10
+      },
+      {
+        "name": "PlaceBuilding::NAPOWR",
+        "count": 10
+      },
+      {
+        "name": "Queue::Add::NAWEAP",
+        "count": 10
+      },
+      {
+        "name": "SellObject",
+        "count": 9
+      },
+      {
+        "name": "Queue::Add::NALASR",
+        "count": 8
+      },
+      {
+        "name": "PlaceBuilding::GAWEAP",
+        "count": 8
+      },
+      {
+        "name": "Queue::Add::NAFLAK",
+        "count": 7
+      },
+      {
+        "name": "PlaceBuilding::NAWEAP",
+        "count": 7
+      },
+      {
+        "name": "Queue::Cancel::MTNK",
+        "count": 7
+      },
+      {
+        "name": "ToggleRepair",
+        "count": 7
+      },
+      {
+        "name": "ActivateSuperWeapon::AmerParaDrop",
+        "count": 6
+      },
+      {
+        "name": "Queue::Cancel::HTNK",
+        "count": 6
+      },
+      {
+        "name": "Queue::Add::CMIN",
+        "count": 6
+      },
+      {
+        "name": "Order::Capture::object",
+        "count": 6
+      },
+      {
+        "name": "PlaceBuilding::NAFLAK",
+        "count": 5
+      },
+      {
+        "name": "Queue::Add::ORCA",
+        "count": 5
+      },
+      {
+        "name": "Queue::Add::SREF",
+        "count": 5
+      },
+      {
+        "name": "Order::Dock::object",
+        "count": 5
+      },
+      {
+        "name": "Queue::Add::NAHAND",
+        "count": 5
+      },
+      {
+        "name": "Queue::Cancel::JUMPJET",
+        "count": 4
+      },
+      {
+        "name": "Queue::Cancel::NAFLAK",
+        "count": 4
+      },
+      {
+        "name": "Order::Deploy::object",
+        "count": 4
+      },
+      {
+        "name": "PlaceBuilding::NALASR",
+        "count": 4
+      },
+      {
+        "name": "PlaceBuilding::NAHAND",
+        "count": 4
+      },
+      {
+        "name": "ResignGame",
+        "count": 4
+      },
+      {
+        "name": "Queue::Add::SENGINEER",
+        "count": 4
+      },
+      {
+        "name": "Queue::Cancel::NALASR",
+        "count": 3
+      },
+      {
+        "name": "Queue::Add::HARV",
+        "count": 3
+      },
+      {
+        "name": "Order::Move::object",
+        "count": 3
+      },
+      {
+        "name": "Queue::Cancel::CMIN",
+        "count": 3
+      },
+      {
+        "name": "Queue::Add::E1",
+        "count": 3
+      },
+      {
+        "name": "Queue::Cancel::GAWEAP",
+        "count": 2
+      },
+      {
+        "name": "Queue::Add::GAPILE",
+        "count": 2
+      },
+      {
+        "name": "PlaceBuilding::GAPILE",
+        "count": 2
+      },
+      {
+        "name": "Queue::Add::ENGINEER",
+        "count": 2
+      },
+      {
+        "name": "Queue::Cancel::GAREFN",
+        "count": 2
+      },
+      {
+        "name": "Order::AttackMove::ore_tile",
+        "count": 1
+      },
+      {
+        "name": "Order::Scatter::none",
+        "count": 1
+      },
+      {
+        "name": "Order::Stop::none",
+        "count": 1
+      },
+      {
+        "name": "Order::ForceAttack::tile",
+        "count": 1
+      }
+    ],
+    "canonicalActionTypes": [
+      {
+        "name": "SelectUnits",
+        "count": 1322
+      },
+      {
+        "name": "Order::Move::tile",
+        "count": 609
+      },
+      {
+        "name": "Queue::Add::HTNK",
+        "count": 88
+      },
+      {
+        "name": "Order::Attack::object",
+        "count": 70
+      },
+      {
+        "name": "Order::Move::ore_tile",
+        "count": 68
+      },
+      {
+        "name": "Order::AttackMove::tile",
+        "count": 64
+      },
+      {
+        "name": "Order::DeploySelected::none",
+        "count": 61
+      },
+      {
+        "name": "Queue::Add::MTNK",
+        "count": 52
+      },
+      {
+        "name": "Order::Attack::none",
+        "count": 36
+      },
+      {
+        "name": "Queue::Hold::<unk_item>",
+        "count": 33
+      },
+      {
+        "name": "Order::ForceMove::object",
+        "count": 28
+      },
+      {
+        "name": "Queue::Add::DOG",
+        "count": 17
+      },
+      {
+        "name": "Queue::Add::GAPOWR",
+        "count": 16
+      },
+      {
+        "name": "Queue::Add::GAPILL",
+        "count": 16
+      },
+      {
+        "name": "Queue::Add::JUMPJET",
+        "count": 15
+      },
+      {
+        "name": "Queue::Add::NAREFN",
+        "count": 15
+      },
+      {
+        "name": "PlaceBuilding::GAPILL",
+        "count": 15
+      },
+      {
+        "name": "ActivateSuperWeapon::ParaDrop",
+        "count": 14
+      },
+      {
+        "name": "Queue::Add::HTK",
+        "count": 14
+      },
+      {
+        "name": "Queue::Add::GAREFN",
+        "count": 14
+      },
+      {
+        "name": "PlaceBuilding::NAREFN",
+        "count": 14
+      },
+      {
+        "name": "PlaceBuilding::GAREFN",
+        "count": 13
+      },
+      {
+        "name": "PlaceBuilding::GAPOWR",
+        "count": 12
+      },
+      {
+        "name": "Queue::Add::NAPOWR",
+        "count": 12
+      },
+      {
+        "name": "Queue::Add::ADOG",
+        "count": 12
+      },
+      {
+        "name": "Order::Occupy::object",
+        "count": 12
+      },
+      {
+        "name": "Queue::Add::MGTK",
+        "count": 11
+      },
+      {
+        "name": "Order::Gather::ore_tile",
+        "count": 11
+      },
+      {
+        "name": "Queue::Add::E2",
+        "count": 11
+      },
+      {
+        "name": "Queue::Add::GAWEAP",
+        "count": 10
+      },
+      {
+        "name": "PlaceBuilding::NAPOWR",
+        "count": 10
+      },
+      {
+        "name": "Queue::Add::NAWEAP",
+        "count": 10
+      },
+      {
+        "name": "SellObject",
+        "count": 9
+      },
+      {
+        "name": "Queue::Add::NALASR",
+        "count": 8
+      },
+      {
+        "name": "PlaceBuilding::GAWEAP",
+        "count": 8
+      },
+      {
+        "name": "Queue::Add::NAFLAK",
+        "count": 7
+      },
+      {
+        "name": "PlaceBuilding::NAWEAP",
+        "count": 7
+      },
+      {
+        "name": "Queue::Cancel::MTNK",
+        "count": 7
+      },
+      {
+        "name": "ToggleRepair",
+        "count": 7
+      },
+      {
+        "name": "ActivateSuperWeapon::AmerParaDrop",
+        "count": 6
+      },
+      {
+        "name": "Queue::Cancel::HTNK",
+        "count": 6
+      },
+      {
+        "name": "Queue::Add::CMIN",
+        "count": 6
+      },
+      {
+        "name": "Order::Capture::object",
+        "count": 6
+      },
+      {
+        "name": "PlaceBuilding::NAFLAK",
+        "count": 5
+      },
+      {
+        "name": "Queue::Add::ORCA",
+        "count": 5
+      },
+      {
+        "name": "Queue::Add::SREF",
+        "count": 5
+      },
+      {
+        "name": "Queue::Add::NAHAND",
+        "count": 5
+      },
+      {
+        "name": "Queue::Cancel::JUMPJET",
+        "count": 4
+      },
+      {
+        "name": "Queue::Cancel::NAFLAK",
+        "count": 4
+      },
+      {
+        "name": "PlaceBuilding::<unk_building>",
+        "count": 4
+      },
+      {
+        "name": "Queue::Add::<unk_item>",
+        "count": 4
+      },
+      {
+        "name": "Order::Deploy::object",
+        "count": 4
+      },
+      {
+        "name": "PlaceBuilding::NALASR",
+        "count": 4
+      },
+      {
+        "name": "PlaceBuilding::NAHAND",
+        "count": 4
+      },
+      {
+        "name": "ResignGame",
+        "count": 4
+      },
+      {
+        "name": "Queue::Add::SENGINEER",
+        "count": 4
+      },
+      {
+        "name": "Queue::Cancel::NALASR",
+        "count": 3
+      },
+      {
+        "name": "Queue::Add::HARV",
+        "count": 3
+      },
+      {
+        "name": "Queue::Cancel::CMIN",
+        "count": 3
+      },
+      {
+        "name": "Queue::Add::E1",
+        "count": 3
+      },
+      {
+        "name": "Queue::Cancel::GAWEAP",
+        "count": 2
+      },
+      {
+        "name": "Order::Dock::object",
+        "count": 2
+      },
+      {
+        "name": "Queue::Add::GAPILE",
+        "count": 2
+      },
+      {
+        "name": "PlaceBuilding::GAPILE",
+        "count": 2
+      },
+      {
+        "name": "Queue::Add::ENGINEER",
+        "count": 2
+      },
+      {
+        "name": "Queue::Cancel::GAREFN",
+        "count": 2
+      },
+      {
+        "name": "Order::AttackMove::ore_tile",
+        "count": 1
+      },
+      {
+        "name": "Order::Scatter::none",
+        "count": 1
+      },
+      {
+        "name": "Order::Stop::none",
+        "count": 1
+      },
+      {
+        "name": "Order::ForceAttack::tile",
+        "count": 1
+      }
+    ],
+    "fallbackObservedActionTypes": [
+      {
+        "name": "Queue::Hold::UnknownItem",
+        "count": 33
+      },
+      {
+        "name": "PlaceBuilding::NANRCT",
+        "count": 1
+      },
+      {
+        "name": "Queue::Add::NAIRON",
+        "count": 1
+      },
+      {
+        "name": "Queue::Add::NASAM",
+        "count": 1
+      },
+      {
+        "name": "Queue::Cancel::NASAM",
+        "count": 1
+      },
+      {
+        "name": "Queue::Add::GAGAP",
+        "count": 1
+      },
+      {
+        "name": "PlaceBuilding::GAGAP",
+        "count": 1
+      },
+      {
+        "name": "PlaceBuilding::NAIRON",
+        "count": 1
+      },
+      {
+        "name": "Queue::Add::GASPYSAT",
+        "count": 1
+      },
+      {
+        "name": "PlaceBuilding::GASPYSAT",
+        "count": 1
+      }
+    ],
+    "fallbackReasonCounts": [
+      {
+        "reason": "unknown_queue_item",
+        "count": 38
+      },
+      {
+        "reason": "unknown_building",
+        "count": 4
+      }
+    ]
+  },
+  "reports": [
+    {
+      "replay": {
+        "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00758dde-b725-4442-ae8f-a657069251a0.rpl",
+        "gameId": "00758dde-b725-4442-ae8f-a657069251a0",
+        "mapName": "2_pinch_point_le.map",
+        "endTick": 35251,
+        "players": [
+          {
+            "name": "mecharse",
+            "countryId": 6,
+            "colorId": 4,
+            "startPos": -2,
+            "teamId": -2
+          },
+          {
+            "name": "bikerush",
+            "countryId": 0,
+            "colorId": 1,
+            "startPos": -2,
+            "teamId": -2
+          }
+        ]
+      },
+      "sampledPlayers": [
+        "mecharse",
+        "bikerush"
+      ],
+      "totalActionCount": 1950,
+      "exactActionCount": 1920,
+      "fallbackActionCount": 30,
+      "fallbackRate": 0.015384615384615385,
+      "observedActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 917
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 423
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 62
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 54
+        },
+        {
+          "name": "Order::Attack::none",
+          "count": 36
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 30
+        },
+        {
+          "name": "Queue::Add::MTNK",
+          "count": 30
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 25
+        },
+        {
+          "name": "Order::ForceMove::object",
+          "count": 23
+        },
+        {
+          "name": "Queue::Hold::UnknownItem",
+          "count": 21
+        },
+        {
+          "name": "Order::AttackMove::tile",
+          "count": 16
+        },
+        {
+          "name": "Queue::Add::JUMPJET",
+          "count": 15
+        },
+        {
+          "name": "ActivateSuperWeapon::ParaDrop",
+          "count": 14
+        },
+        {
+          "name": "Queue::Add::HTK",
+          "count": 13
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 12
+        },
+        {
+          "name": "Queue::Add::MGTK",
+          "count": 11
+        },
+        {
+          "name": "PlaceBuilding::GAPOWR",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::GAREFN",
+          "count": 10
+        },
+        {
+          "name": "PlaceBuilding::GAREFN",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::NAFLAK",
+          "count": 7
+        },
+        {
+          "name": "Order::Gather::ore_tile",
+          "count": 7
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::NALASR",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::GAWEAP",
+          "count": 6
+        },
+        {
+          "name": "SellObject",
+          "count": 6
+        },
+        {
+          "name": "ActivateSuperWeapon::AmerParaDrop",
+          "count": 6
+        },
+        {
+          "name": "Queue::Cancel::HTNK",
+          "count": 6
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 5
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 5
+        },
+        {
+          "name": "PlaceBuilding::GAWEAP",
+          "count": 5
+        },
+        {
+          "name": "PlaceBuilding::NAFLAK",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::ORCA",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::SREF",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::ADOG",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::GAPILL",
+          "count": 4
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 4
+        },
+        {
+          "name": "Queue::Cancel::JUMPJET",
+          "count": 4
+        },
+        {
+          "name": "Queue::Cancel::NAFLAK",
+          "count": 4
+        },
+        {
+          "name": "Queue::Cancel::MTNK",
+          "count": 4
+        },
+        {
+          "name": "Order::Deploy::object",
+          "count": 3
+        },
+        {
+          "name": "PlaceBuilding::GAPILL",
+          "count": 3
+        },
+        {
+          "name": "PlaceBuilding::NALASR",
+          "count": 3
+        },
+        {
+          "name": "Queue::Cancel::NALASR",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::CMIN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::HARV",
+          "count": 3
+        },
+        {
+          "name": "Order::Move::object",
+          "count": 3
+        },
+        {
+          "name": "Order::Dock::object",
+          "count": 3
+        }
+      ],
+      "canonicalActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 917
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 423
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 62
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 54
+        },
+        {
+          "name": "Order::Attack::none",
+          "count": 36
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 30
+        },
+        {
+          "name": "Queue::Add::MTNK",
+          "count": 30
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 25
+        },
+        {
+          "name": "Order::ForceMove::object",
+          "count": 23
+        },
+        {
+          "name": "Queue::Hold::<unk_item>",
+          "count": 21
+        },
+        {
+          "name": "Order::AttackMove::tile",
+          "count": 16
+        },
+        {
+          "name": "Queue::Add::JUMPJET",
+          "count": 15
+        },
+        {
+          "name": "ActivateSuperWeapon::ParaDrop",
+          "count": 14
+        },
+        {
+          "name": "Queue::Add::HTK",
+          "count": 13
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 12
+        },
+        {
+          "name": "Queue::Add::MGTK",
+          "count": 11
+        },
+        {
+          "name": "PlaceBuilding::GAPOWR",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::GAREFN",
+          "count": 10
+        },
+        {
+          "name": "PlaceBuilding::GAREFN",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::NAFLAK",
+          "count": 7
+        },
+        {
+          "name": "Order::Gather::ore_tile",
+          "count": 7
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::NALASR",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::GAWEAP",
+          "count": 6
+        },
+        {
+          "name": "SellObject",
+          "count": 6
+        },
+        {
+          "name": "ActivateSuperWeapon::AmerParaDrop",
+          "count": 6
+        },
+        {
+          "name": "Queue::Cancel::HTNK",
+          "count": 6
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 5
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 5
+        },
+        {
+          "name": "PlaceBuilding::GAWEAP",
+          "count": 5
+        },
+        {
+          "name": "PlaceBuilding::NAFLAK",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::ORCA",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::SREF",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::ADOG",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::GAPILL",
+          "count": 4
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 4
+        },
+        {
+          "name": "Queue::Cancel::JUMPJET",
+          "count": 4
+        },
+        {
+          "name": "Queue::Cancel::NAFLAK",
+          "count": 4
+        },
+        {
+          "name": "Queue::Cancel::MTNK",
+          "count": 4
+        },
+        {
+          "name": "PlaceBuilding::<unk_building>",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::<unk_item>",
+          "count": 4
+        },
+        {
+          "name": "Order::Deploy::object",
+          "count": 3
+        },
+        {
+          "name": "PlaceBuilding::GAPILL",
+          "count": 3
+        },
+        {
+          "name": "PlaceBuilding::NALASR",
+          "count": 3
+        },
+        {
+          "name": "Queue::Cancel::NALASR",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::CMIN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::HARV",
+          "count": 3
+        }
+      ],
+      "fallbackObservedActionTypes": [
+        {
+          "name": "Queue::Hold::UnknownItem",
+          "count": 21
+        },
+        {
+          "name": "PlaceBuilding::NANRCT",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::NAIRON",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::NASAM",
+          "count": 1
+        },
+        {
+          "name": "Queue::Cancel::NASAM",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::GAGAP",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAGAP",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAIRON",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::GASPYSAT",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GASPYSAT",
+          "count": 1
+        }
+      ],
+      "fallbackReasonCounts": [
+        {
+          "reason": "unknown_queue_item",
+          "count": 26
+        },
+        {
+          "reason": "unknown_building",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "replay": {
+        "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00ceb8d5-83ff-47c2-8cc0-83cc01c7754a.rpl",
+        "gameId": "00ceb8d5-83ff-47c2-8cc0-83cc01c7754a",
+        "mapName": "4_caverns_v410.map",
+        "endTick": 10108,
+        "players": [
+          {
+            "name": "Dogoz",
+            "countryId": 6,
+            "colorId": 1,
+            "startPos": -2,
+            "teamId": -2
+          },
+          {
+            "name": "JADAYUM",
+            "countryId": 2,
+            "colorId": 0,
+            "startPos": -2,
+            "teamId": -2
+          }
+        ]
+      },
+      "sampledPlayers": [
+        "Dogoz",
+        "JADAYUM"
+      ],
+      "totalActionCount": 407,
+      "exactActionCount": 396,
+      "fallbackActionCount": 11,
+      "fallbackRate": 0.02702702702702703,
+      "observedActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 165
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 68
+        },
+        {
+          "name": "Order::AttackMove::tile",
+          "count": 28
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 20
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 13
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 13
+        },
+        {
+          "name": "Queue::Hold::UnknownItem",
+          "count": 11
+        },
+        {
+          "name": "Queue::Add::MTNK",
+          "count": 11
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::ADOG",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::GAPILL",
+          "count": 4
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 4
+        },
+        {
+          "name": "PlaceBuilding::GAPILL",
+          "count": 4
+        },
+        {
+          "name": "Order::Gather::ore_tile",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::CMIN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Cancel::CMIN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Cancel::MTNK",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAHAND",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::E2",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Cancel::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::E1",
+          "count": 2
+        },
+        {
+          "name": "Order::Dock::object",
+          "count": 2
+        },
+        {
+          "name": "SellObject",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAHAND",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Order::AttackMove::ore_tile",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::HTK",
+          "count": 1
+        },
+        {
+          "name": "Order::Scatter::none",
+          "count": 1
+        },
+        {
+          "name": "ToggleRepair",
+          "count": 1
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "canonicalActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 165
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 68
+        },
+        {
+          "name": "Order::AttackMove::tile",
+          "count": 28
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 20
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 13
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 13
+        },
+        {
+          "name": "Queue::Hold::<unk_item>",
+          "count": 11
+        },
+        {
+          "name": "Queue::Add::MTNK",
+          "count": 11
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::ADOG",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::GAPILL",
+          "count": 4
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 4
+        },
+        {
+          "name": "PlaceBuilding::GAPILL",
+          "count": 4
+        },
+        {
+          "name": "Order::Gather::ore_tile",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::CMIN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Cancel::CMIN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Cancel::MTNK",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAHAND",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::E2",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Cancel::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::E1",
+          "count": 2
+        },
+        {
+          "name": "Order::Dock::object",
+          "count": 2
+        },
+        {
+          "name": "SellObject",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAHAND",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Order::AttackMove::ore_tile",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::HTK",
+          "count": 1
+        },
+        {
+          "name": "Order::Scatter::none",
+          "count": 1
+        },
+        {
+          "name": "ToggleRepair",
+          "count": 1
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "fallbackObservedActionTypes": [
+        {
+          "name": "Queue::Hold::UnknownItem",
+          "count": 11
+        }
+      ],
+      "fallbackReasonCounts": [
+        {
+          "reason": "unknown_queue_item",
+          "count": 11
+        }
+      ]
+    },
+    {
+      "replay": {
+        "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00d0f6be-26b5-4d8a-b76e-890b05e364d8.rpl",
+        "gameId": "00d0f6be-26b5-4d8a-b76e-890b05e364d8",
+        "mapName": "2_pinch_point_le.map",
+        "endTick": 4566,
+        "players": [
+          {
+            "name": "matel1s",
+            "countryId": 7,
+            "colorId": 3,
+            "startPos": -2,
+            "teamId": -2
+          },
+          {
+            "name": "Dynamic",
+            "countryId": 6,
+            "colorId": 2,
+            "startPos": -2,
+            "teamId": -2
+          }
+        ]
+      },
+      "sampledPlayers": [
+        "matel1s",
+        "Dynamic"
+      ],
+      "totalActionCount": 179,
+      "exactActionCount": 179,
+      "fallbackActionCount": 0,
+      "fallbackRate": 0.0,
+      "observedActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 85
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 41
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 7
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::E2",
+          "count": 5
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAHAND",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAHAND",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::SENGINEER",
+          "count": 2
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 2
+        },
+        {
+          "name": "Order::Capture::object",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NALASR",
+          "count": 2
+        },
+        {
+          "name": "Order::Gather::ore_tile",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NALASR",
+          "count": 1
+        },
+        {
+          "name": "ToggleRepair",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Order::Stop::none",
+          "count": 1
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "canonicalActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 85
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 41
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 7
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 6
+        },
+        {
+          "name": "Queue::Add::E2",
+          "count": 5
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAHAND",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAHAND",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::SENGINEER",
+          "count": 2
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 2
+        },
+        {
+          "name": "Order::Capture::object",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NALASR",
+          "count": 2
+        },
+        {
+          "name": "Order::Gather::ore_tile",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NALASR",
+          "count": 1
+        },
+        {
+          "name": "ToggleRepair",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Order::Stop::none",
+          "count": 1
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "fallbackObservedActionTypes": [],
+      "fallbackReasonCounts": []
+    },
+    {
+      "replay": {
+        "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00ecb51b-4a4e-40a9-93d3-99dea7a4c42a.rpl",
+        "gameId": "00ecb51b-4a4e-40a9-93d3-99dea7a4c42a",
+        "mapName": "4_jungle_of_vietnam_le.map",
+        "endTick": 270,
+        "players": [
+          {
+            "name": "Tubbie",
+            "countryId": 2,
+            "colorId": 1,
+            "startPos": -2,
+            "teamId": -2
+          },
+          {
+            "name": "girl-noob",
+            "countryId": 2,
+            "colorId": 3,
+            "startPos": -2,
+            "teamId": -2
+          }
+        ]
+      },
+      "sampledPlayers": [
+        "Tubbie",
+        "girl-noob"
+      ],
+      "totalActionCount": 7,
+      "exactActionCount": 7,
+      "fallbackActionCount": 0,
+      "fallbackRate": 0.0,
+      "observedActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 2
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 2
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "canonicalActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 2
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 2
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "fallbackObservedActionTypes": [],
+      "fallbackReasonCounts": []
+    },
+    {
+      "replay": {
+        "path": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\ladder_replays_top50\\00f39ef1-410a-4bf0-802f-2eb5d441093b.rpl",
+        "gameId": "00f39ef1-410a-4bf0-802f-2eb5d441093b",
+        "mapName": "4_golden_state_freeway_le.map",
+        "endTick": 8940,
+        "players": [
+          {
+            "name": "wudi306",
+            "countryId": 6,
+            "colorId": 5,
+            "startPos": -2,
+            "teamId": -2
+          },
+          {
+            "name": "JADAYUM",
+            "countryId": 2,
+            "colorId": 6,
+            "startPos": -2,
+            "teamId": -2
+          }
+        ]
+      },
+      "sampledPlayers": [
+        "wudi306",
+        "JADAYUM"
+      ],
+      "totalActionCount": 395,
+      "exactActionCount": 394,
+      "fallbackActionCount": 1,
+      "fallbackRate": 0.002531645569620253,
+      "observedActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 153
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 77
+        },
+        {
+          "name": "Order::AttackMove::tile",
+          "count": 20
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 18
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 13
+        },
+        {
+          "name": "Order::Occupy::object",
+          "count": 12
+        },
+        {
+          "name": "Queue::Add::MTNK",
+          "count": 11
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::GAPILL",
+          "count": 8
+        },
+        {
+          "name": "PlaceBuilding::GAPILL",
+          "count": 8
+        },
+        {
+          "name": "Order::ForceMove::object",
+          "count": 5
+        },
+        {
+          "name": "ToggleRepair",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::ADOG",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::E2",
+          "count": 4
+        },
+        {
+          "name": "Order::Capture::object",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 3
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::SENGINEER",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::ENGINEER",
+          "count": 2
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Cancel::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::NAHAND",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAHAND",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::E1",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAREFN",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Order::Deploy::object",
+          "count": 1
+        },
+        {
+          "name": "SellObject",
+          "count": 1
+        },
+        {
+          "name": "Queue::Hold::UnknownItem",
+          "count": 1
+        },
+        {
+          "name": "Order::ForceAttack::tile",
+          "count": 1
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "canonicalActionTypes": [
+        {
+          "name": "SelectUnits",
+          "count": 153
+        },
+        {
+          "name": "Order::Move::tile",
+          "count": 77
+        },
+        {
+          "name": "Order::AttackMove::tile",
+          "count": 20
+        },
+        {
+          "name": "Order::Attack::object",
+          "count": 18
+        },
+        {
+          "name": "Order::DeploySelected::none",
+          "count": 13
+        },
+        {
+          "name": "Order::Occupy::object",
+          "count": 12
+        },
+        {
+          "name": "Queue::Add::MTNK",
+          "count": 11
+        },
+        {
+          "name": "Queue::Add::HTNK",
+          "count": 10
+        },
+        {
+          "name": "Queue::Add::GAPILL",
+          "count": 8
+        },
+        {
+          "name": "PlaceBuilding::GAPILL",
+          "count": 8
+        },
+        {
+          "name": "Order::ForceMove::object",
+          "count": 5
+        },
+        {
+          "name": "ToggleRepair",
+          "count": 5
+        },
+        {
+          "name": "Queue::Add::ADOG",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::E2",
+          "count": 4
+        },
+        {
+          "name": "Order::Capture::object",
+          "count": 4
+        },
+        {
+          "name": "Queue::Add::NAREFN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::DOG",
+          "count": 3
+        },
+        {
+          "name": "PlaceBuilding::NAREFN",
+          "count": 3
+        },
+        {
+          "name": "Queue::Add::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::NAPOWR",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::SENGINEER",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::ENGINEER",
+          "count": 2
+        },
+        {
+          "name": "Order::Move::ore_tile",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::NAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "PlaceBuilding::GAWEAP",
+          "count": 2
+        },
+        {
+          "name": "Queue::Cancel::GAREFN",
+          "count": 2
+        },
+        {
+          "name": "Queue::Add::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::NAHAND",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPOWR",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAHAND",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAPILE",
+          "count": 1
+        },
+        {
+          "name": "Queue::Add::E1",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::GAREFN",
+          "count": 1
+        },
+        {
+          "name": "PlaceBuilding::NAWEAP",
+          "count": 1
+        },
+        {
+          "name": "Order::Deploy::object",
+          "count": 1
+        },
+        {
+          "name": "SellObject",
+          "count": 1
+        },
+        {
+          "name": "Queue::Hold::<unk_item>",
+          "count": 1
+        },
+        {
+          "name": "Order::ForceAttack::tile",
+          "count": 1
+        },
+        {
+          "name": "ResignGame",
+          "count": 1
+        }
+      ],
+      "fallbackObservedActionTypes": [
+        {
+          "name": "Queue::Hold::UnknownItem",
+          "count": 1
+        }
+      ],
+      "fallbackReasonCounts": [
+        {
+          "reason": "unknown_queue_item",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "errors": []
+}
