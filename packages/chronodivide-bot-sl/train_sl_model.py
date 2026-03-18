@@ -12,6 +12,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
 
+from action_dict import ACTION_INFO_MASK, ACTION_TYPE_ID_TO_NAME
 from model_lib.batch import collate_model_samples
 from model_lib.dataset import ModelShardFilter, ModelShardRecord, RA2SLSectionDataset, discover_model_shards
 from model_lib.losses import compute_ra2_sl_loss
@@ -36,6 +37,10 @@ class TrainConfig:
     max_shards: int | None
     max_train_samples: int | None
     max_val_samples: int | None
+    teacher_forcing_mode: str
+    action_type_weighting: str
+    action_type_weight_min: float
+    action_type_weight_max: float
     batch_size: int
     num_workers: int
     epochs: int
@@ -88,6 +93,20 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--max-shards", type=int, default=None)
     parser.add_argument("--max-train-samples", type=int, default=None)
     parser.add_argument("--max-val-samples", type=int, default=None)
+    parser.add_argument(
+        "--teacher-forcing-mode",
+        type=str,
+        choices=("none", "action_type", "action_type_queue"),
+        default="action_type_queue",
+    )
+    parser.add_argument(
+        "--action-type-weighting",
+        type=str,
+        choices=("none", "sqrt_inverse_frequency", "inverse_frequency"),
+        default="sqrt_inverse_frequency",
+    )
+    parser.add_argument("--action-type-weight-min", type=float, default=0.25)
+    parser.add_argument("--action-type-weight-max", type=float, default=4.0)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=1)
@@ -117,6 +136,10 @@ def parse_args() -> TrainConfig:
         max_shards=args.max_shards,
         max_train_samples=args.max_train_samples,
         max_val_samples=args.max_val_samples,
+        teacher_forcing_mode=args.teacher_forcing_mode,
+        action_type_weighting=args.action_type_weighting,
+        action_type_weight_min=args.action_type_weight_min,
+        action_type_weight_max=args.action_type_weight_max,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         epochs=args.epochs,
@@ -211,6 +234,111 @@ def build_loader(dataset: Dataset[Any], config: TrainConfig, *, shuffle: bool) -
     )
 
 
+def build_action_type_weighting(
+    dataset: Dataset[Any],
+    config: TrainConfig,
+) -> tuple[torch.Tensor | None, dict[str, Any] | None]:
+    if config.action_type_weighting == "none":
+        return None, {
+            "mode": "none",
+            "weightMin": config.action_type_weight_min,
+            "weightMax": config.action_type_weight_max,
+            "classCount": len(ACTION_TYPE_ID_TO_NAME),
+        }
+
+    class_count = len(ACTION_TYPE_ID_TO_NAME)
+    counts = torch.zeros(class_count, dtype=torch.float64)
+    for sample_index in range(len(dataset)):
+        sample = dataset[sample_index]
+        if int(sample["training_masks"]["actionTypeLossMask"].item()) != 1:
+            continue
+        action_type_id = int(torch.argmax(sample["training_targets"]["actionTypeOneHot"]).item())
+        counts[action_type_id] += 1.0
+
+    seen_mask = counts > 0
+    weights = torch.ones(class_count, dtype=torch.float32)
+    if not bool(seen_mask.any()):
+        return weights, {
+            "mode": config.action_type_weighting,
+            "weightMin": config.action_type_weight_min,
+            "weightMax": config.action_type_weight_max,
+            "classCount": class_count,
+            "seenClassCount": 0,
+            "sampleCount": 0,
+            "topWeighted": [],
+            "topFrequent": [],
+            "familyCounts": {},
+        }
+
+    seen_counts = counts[seen_mask]
+    mean_count = float(seen_counts.mean().item())
+    if config.action_type_weighting == "inverse_frequency":
+        raw_seen_weights = mean_count / seen_counts
+    elif config.action_type_weighting == "sqrt_inverse_frequency":
+        raw_seen_weights = torch.sqrt(torch.tensor(mean_count, dtype=torch.float64) / seen_counts)
+    else:
+        raise ValueError(f"Unsupported action-type weighting mode: {config.action_type_weighting}")
+
+    clamped_seen_weights = raw_seen_weights.clamp(min=config.action_type_weight_min, max=config.action_type_weight_max)
+    normalized_seen_weights = clamped_seen_weights / clamped_seen_weights.mean().clamp(min=1e-9)
+    weights[seen_mask] = normalized_seen_weights.to(torch.float32)
+
+    top_weighted: list[dict[str, Any]] = []
+    seen_indices = torch.nonzero(seen_mask, as_tuple=False).reshape(-1)
+    ranked_by_weight = sorted(
+        ((int(index.item()), float(weights[int(index.item())].item())) for index in seen_indices),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    for action_type_id, weight in ranked_by_weight[:20]:
+        action_info = ACTION_INFO_MASK[action_type_id]
+        top_weighted.append(
+            {
+                "actionTypeId": action_type_id,
+                "actionTypeName": ACTION_TYPE_ID_TO_NAME[action_type_id],
+                "family": action_info["family"],
+                "count": int(counts[action_type_id].item()),
+                "weight": weight,
+            }
+        )
+
+    ranked_by_count = sorted(
+        ((int(index.item()), int(counts[int(index.item())].item())) for index in seen_indices),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    top_frequent: list[dict[str, Any]] = []
+    for action_type_id, count in ranked_by_count[:20]:
+        action_info = ACTION_INFO_MASK[action_type_id]
+        top_frequent.append(
+            {
+                "actionTypeId": action_type_id,
+                "actionTypeName": ACTION_TYPE_ID_TO_NAME[action_type_id],
+                "family": action_info["family"],
+                "count": count,
+                "weight": float(weights[action_type_id].item()),
+            }
+        )
+
+    family_counts: dict[str, int] = {}
+    for action_type_id, count in ranked_by_count:
+        family = str(ACTION_INFO_MASK[action_type_id]["family"])
+        family_counts[family] = family_counts.get(family, 0) + count
+
+    payload = {
+        "mode": config.action_type_weighting,
+        "weightMin": config.action_type_weight_min,
+        "weightMax": config.action_type_weight_max,
+        "classCount": class_count,
+        "seenClassCount": int(seen_mask.sum().item()),
+        "sampleCount": int(counts.sum().item()),
+        "topWeighted": top_weighted,
+        "topFrequent": top_frequent,
+        "familyCounts": dict(sorted(family_counts.items())),
+    }
+    return weights, payload
+
+
 def init_metrics_accumulator() -> dict[str, float]:
     return {
         "total_loss": 0.0,
@@ -241,6 +369,8 @@ def run_epoch(
     optimizer: torch.optim.Optimizer | None,
     device: torch.device,
     grad_clip_norm: float,
+    action_type_class_weights: torch.Tensor | None,
+    teacher_forcing_mode: str,
 ) -> dict[str, float]:
     training = optimizer is not None
     if training:
@@ -256,8 +386,16 @@ def run_epoch(
             optimizer.zero_grad(set_to_none=True)
 
         with torch.set_grad_enabled(training):
-            outputs = model(batch["model_inputs"])
-            loss_output = compute_ra2_sl_loss(outputs, batch)
+            outputs = model(
+                batch["model_inputs"],
+                teacher_forcing_targets=batch["training_targets"] if training else None,
+                teacher_forcing_mode=teacher_forcing_mode if training else "none",
+            )
+            loss_output = compute_ra2_sl_loss(
+                outputs,
+                batch,
+                action_type_class_weights=action_type_class_weights,
+            )
             if training:
                 loss_output.total_loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
@@ -350,11 +488,14 @@ def main() -> None:
     train_dataset = limit_dataset(train_dataset, config.max_train_samples)
     if val_dataset is not None:
         val_dataset = limit_dataset(val_dataset, config.max_val_samples)
+    action_type_class_weights, action_type_weight_payload = build_action_type_weighting(train_dataset, config)
     train_loader = build_loader(train_dataset, config, shuffle=True)
     val_loader = build_loader(val_dataset, config, shuffle=False) if val_dataset is not None else None
 
     entity_name_vocab_size = infer_entity_name_vocab_size(records)
     device = resolve_device(config)
+    if action_type_class_weights is not None:
+        action_type_class_weights = action_type_class_weights.to(device)
     model = RA2SLBaselineModel(
         RA2SLBaselineConfig(
             entity_name_vocab_size=entity_name_vocab_size,
@@ -386,10 +527,14 @@ def main() -> None:
         "valShardCount": len(val_records),
         "trainSampleCount": len(train_dataset),
         "valSampleCount": len(val_dataset) if val_dataset is not None else 0,
+        "teacherForcingMode": config.teacher_forcing_mode,
+        "actionTypeWeighting": action_type_weight_payload,
         "trainShards": [record.stem for record in train_records],
         "valShards": [record.stem for record in val_records],
     }
     save_json(config.output_dir / "data_split.json", split_payload)
+    if action_type_weight_payload is not None:
+        save_json(config.output_dir / "action_type_weighting.json", action_type_weight_payload)
 
     history_path = config.output_dir / "history.jsonl"
     if start_epoch == 0 and history_path.exists():
@@ -404,6 +549,8 @@ def main() -> None:
             optimizer=optimizer,
             device=device,
             grad_clip_norm=config.grad_clip_norm,
+            action_type_class_weights=action_type_class_weights,
+            teacher_forcing_mode=config.teacher_forcing_mode,
         )
         val_metrics = None
         if val_loader is not None:
@@ -413,6 +560,8 @@ def main() -> None:
                 optimizer=None,
                 device=device,
                 grad_clip_norm=config.grad_clip_norm,
+                action_type_class_weights=action_type_class_weights,
+                teacher_forcing_mode=config.teacher_forcing_mode,
             )
 
         scheduler.step()
@@ -478,6 +627,8 @@ def main() -> None:
         "epochs": config.epochs,
         "checkpointDir": str(config.checkpoint_dir),
         "bestValLoss": best_val_loss,
+        "teacherForcingMode": config.teacher_forcing_mode,
+        "actionTypeWeighting": action_type_weight_payload,
         "finalTrainMetrics": last_train_metrics,
         "finalValMetrics": last_val_metrics,
     }

@@ -176,7 +176,13 @@ class RA2SLBaselineModel(nn.Module):
             )
         )
 
-    def forward(self, model_inputs: dict[str, object]) -> dict[str, torch.Tensor]:
+    def forward(
+        self,
+        model_inputs: dict[str, object],
+        *,
+        teacher_forcing_targets: dict[str, torch.Tensor] | None = None,
+        teacher_forcing_mode: str = "none",
+    ) -> dict[str, torch.Tensor]:
         core_outputs = self.core(model_inputs)
         head_outputs = self.heads(
             fused_latent=core_outputs["fused_latent"],
@@ -184,5 +190,7 @@ class RA2SLBaselineModel(nn.Module):
             entity_mask=core_outputs["entity_mask"],
             spatial_feature_map=core_outputs["spatial_feature_map"],
             available_action_mask=model_inputs["scalar_sections"].get("availableActionMask"),
+            teacher_forcing_targets=teacher_forcing_targets,
+            teacher_forcing_mode=teacher_forcing_mode,
         )
         return {**core_outputs, **head_outputs}

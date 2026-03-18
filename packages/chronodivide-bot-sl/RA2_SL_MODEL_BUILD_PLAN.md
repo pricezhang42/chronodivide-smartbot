@@ -270,6 +270,13 @@ Recommended RA2 policy:
   - queue and selected units can condition later heads
   - selected-units head can become autoregressive with derived EOF
 
+Current implementation state:
+
+- partial teacher-forced conditioning is now implemented
+- during training, later heads can read the gold `actionType` and `queue`
+- during evaluation/inference, the same heads fall back to the model's own predicted arguments
+- this improved the small held-out Arab Pinch Point slice materially, but it is still not equivalent to a full `mimic_forward`-style autoregressive decoder
+
 So the model path should be built so that an autoregressive embedding can be inserted later without a large rewrite.
 
 ## Loss Strategy
@@ -303,6 +310,19 @@ Use the saved training masks directly:
 - `quantityLossMask`
 
 This should be implemented in one RA2-native loss file, not by trying to route RA2 tensors through SC2 `Label.label2action`.
+
+Chosen V1 policy for `actionType`:
+
+- use capped `sqrt_inverse_frequency` class weights derived from the training slice
+- normalize weights so the mean seen-class weight stays near `1.0`
+- clamp the weights to a conservative range to avoid exploding rare-action gradients
+- keep an escape hatch to disable weighting for ablations
+
+Current practical takeaway:
+
+- this helps the objective somewhat on the tiny Arab Pinch Point slice
+- but it does not, by itself, solve the held-out combat / queue-heavy / superweapon errors
+- so it should be treated as a useful baseline improvement, not the final answer
 
 ## Training Protocol
 

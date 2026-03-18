@@ -179,7 +179,7 @@ Related design note:
 - `[x]` Implement masked loss for `quantity`.
 - `[x]` Use saved loss masks directly from `.training.pt`.
 - `[x]` Apply `availableActionMask` as an action-type logit mask in loss/inference code.
-- `[ ]` Decide and document action-type loss weighting policy:
+- `[x]` Decide and document action-type loss weighting policy:
   - uniform
   - or mAS-style category-aware weighting
 - `[x]` Add per-head metrics:
@@ -262,6 +262,10 @@ Related design note:
 - `[ ]` Add sequence batching if the baseline is stable.
 - `[ ]` Add an optional recurrent or transformer core.
 - `[ ]` Add replay-window dataset items with `[B, S, ...]` batch support.
+- `[x]` Add partial teacher-forced head conditioning for later heads:
+  - gold `actionType` may condition later heads during training
+  - gold `queue` may condition later heads during training
+  - evaluation/inference still runs free from the model's own predictions
 - `[ ]` Add a `mimic_forward`-style teacher-forced training path.
 - `[ ]` Add a separate free-running evaluation forward pass.
 - `[ ]` Add a derived EOF-based autoregressive `units` head.
@@ -276,7 +280,6 @@ Related design note:
 
 ## Recommended Immediate Next Step
 
-- `[ ]` Implement Phase 5 and Phase 6:
-  - `model_lib/heads.py`
-  - `model_lib/losses.py`
-  - one-batch backward smoke test
+- `[ ]` Choose one of the next two high-value directions:
+  - expand the Arab `Pinch Point LE` tensor corpus beyond the current 2-shard manifest
+  - add a separate free-running evaluation pass and compare it directly with the teacher-forced training pass

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 
-from action_dict import ACTION_TYPE_ID_TO_NAME
+from action_dict import ACTION_INFO_MASK, ACTION_TYPE_ID_TO_NAME
 from transform_lib.common import LABEL_LAYOUT_V1_DELAY_BINS
 
 
@@ -27,6 +27,20 @@ class MLPHead(nn.Module):
 
     def forward(self, latent: torch.Tensor) -> torch.Tensor:
         return self.net(latent)
+
+
+def _one_hot_to_index(one_hot: torch.Tensor) -> torch.Tensor:
+    return torch.argmax(one_hot.to(torch.float32), dim=-1)
+
+
+def _resolve_condition_ids(
+    logits: torch.Tensor,
+    *,
+    teacher_forcing_one_hot: torch.Tensor | None = None,
+) -> torch.Tensor:
+    if teacher_forcing_one_hot is not None:
+        return _one_hot_to_index(teacher_forcing_one_hot)
+    return torch.argmax(logits, dim=-1)
 
 
 class ActionTypeHead(nn.Module):
@@ -174,6 +188,7 @@ class RA2SLPredictionHeads(nn.Module):
             hidden_dim=config.hidden_dim,
             dropout=config.dropout,
         )
+        self.action_type_condition_embedding = nn.Embedding(config.action_vocab_size, config.fusion_dim)
         self.delay_head = DelayHead(
             input_dim=config.fusion_dim,
             delay_bins=config.delay_bins,
@@ -185,6 +200,7 @@ class RA2SLPredictionHeads(nn.Module):
             hidden_dim=config.hidden_dim,
             dropout=config.dropout,
         )
+        self.queue_condition_embedding = nn.Embedding(2, config.fusion_dim)
         self.units_head = UnitsHead(
             latent_dim=config.fusion_dim,
             entity_dim=config.entity_dim,
@@ -215,6 +231,15 @@ class RA2SLPredictionHeads(nn.Module):
             hidden_dim=config.hidden_dim,
             dropout=config.dropout,
         )
+        self.condition_dropout = nn.Dropout(config.dropout)
+        self.register_buffer(
+            "action_type_uses_queue_mask",
+            torch.tensor(
+                [bool(ACTION_INFO_MASK[action_type_id]["usesQueue"]) for action_type_id in range(config.action_vocab_size)],
+                dtype=torch.bool,
+            ),
+            persistent=False,
+        )
 
     def forward(
         self,
@@ -224,14 +249,44 @@ class RA2SLPredictionHeads(nn.Module):
         entity_mask: torch.Tensor,
         spatial_feature_map: torch.Tensor,
         available_action_mask: torch.Tensor | None = None,
+        teacher_forcing_targets: dict[str, torch.Tensor] | None = None,
+        teacher_forcing_mode: str = "none",
     ) -> dict[str, torch.Tensor]:
+        action_type_logits = self.action_type_head(fused_latent, available_action_mask=available_action_mask)
+        action_type_teacher = None
+        if (
+            teacher_forcing_targets is not None
+            and teacher_forcing_mode in {"action_type", "action_type_queue"}
+        ):
+            action_type_teacher = teacher_forcing_targets.get("actionTypeOneHot")
+        action_type_ids = _resolve_condition_ids(
+            action_type_logits,
+            teacher_forcing_one_hot=action_type_teacher,
+        )
+        action_type_condition = self.condition_dropout(self.action_type_condition_embedding(action_type_ids))
+        action_conditioned_latent = fused_latent + action_type_condition
+
+        delay_logits = self.delay_head(action_conditioned_latent)
+        queue_logits = self.queue_head(action_conditioned_latent)
+
+        queue_teacher = None
+        if teacher_forcing_targets is not None and teacher_forcing_mode == "action_type_queue":
+            queue_teacher = teacher_forcing_targets.get("queueOneHot")
+        queue_ids = _resolve_condition_ids(
+            queue_logits,
+            teacher_forcing_one_hot=queue_teacher,
+        )
+        queue_condition = self.condition_dropout(self.queue_condition_embedding(queue_ids))
+        queue_semantic_mask = self.action_type_uses_queue_mask[action_type_ids].to(queue_condition.dtype).unsqueeze(-1)
+        argument_conditioned_latent = action_conditioned_latent + queue_condition * queue_semantic_mask
+
         return {
-            "actionTypeLogits": self.action_type_head(fused_latent, available_action_mask=available_action_mask),
-            "delayLogits": self.delay_head(fused_latent),
-            "queueLogits": self.queue_head(fused_latent),
-            "unitsLogits": self.units_head(fused_latent, entity_embeddings, entity_mask),
-            "targetEntityLogits": self.target_entity_head(fused_latent, entity_embeddings, entity_mask),
-            "targetLocationLogits": self.target_location_head(fused_latent, spatial_feature_map),
-            "targetLocation2Logits": self.target_location2_head(fused_latent, spatial_feature_map),
-            "quantityPred": self.quantity_head(fused_latent),
+            "actionTypeLogits": action_type_logits,
+            "delayLogits": delay_logits,
+            "queueLogits": queue_logits,
+            "unitsLogits": self.units_head(argument_conditioned_latent, entity_embeddings, entity_mask),
+            "targetEntityLogits": self.target_entity_head(argument_conditioned_latent, entity_embeddings, entity_mask),
+            "targetLocationLogits": self.target_location_head(argument_conditioned_latent, spatial_feature_map),
+            "targetLocation2Logits": self.target_location2_head(argument_conditioned_latent, spatial_feature_map),
+            "quantityPred": self.quantity_head(argument_conditioned_latent),
         }

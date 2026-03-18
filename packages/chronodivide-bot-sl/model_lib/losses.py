@@ -17,8 +17,14 @@ def _one_hot_to_index(one_hot: torch.Tensor) -> torch.Tensor:
     return torch.argmax(one_hot.to(torch.float32), dim=-1)
 
 
-def _masked_classification_loss(logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    loss = F.cross_entropy(logits, targets, reduction="none")
+def _masked_classification_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    mask: torch.Tensor,
+    *,
+    class_weights: torch.Tensor | None = None,
+) -> torch.Tensor:
+    loss = F.cross_entropy(logits, targets, reduction="none", weight=class_weights)
     return _masked_mean(loss, mask)
 
 
@@ -61,6 +67,8 @@ class RA2SLLossOutput:
 def compute_ra2_sl_loss(
     outputs: dict[str, torch.Tensor],
     batch: dict[str, Any],
+    *,
+    action_type_class_weights: torch.Tensor | None = None,
 ) -> RA2SLLossOutput:
     targets = batch["training_targets"]
     masks = batch["training_masks"]
@@ -80,7 +88,12 @@ def compute_ra2_sl_loss(
     target_location2_mask = masks["targetLocation2LossMask"].squeeze(-1) > 0
     quantity_mask = masks["quantityLossMask"].squeeze(-1) > 0
 
-    action_type_loss = _masked_classification_loss(outputs["actionTypeLogits"], action_type_targets, action_type_mask)
+    action_type_loss = _masked_classification_loss(
+        outputs["actionTypeLogits"],
+        action_type_targets,
+        action_type_mask,
+        class_weights=action_type_class_weights,
+    )
     delay_loss = _masked_classification_loss(outputs["delayLogits"], delay_targets, delay_mask)
     queue_loss = _masked_classification_loss(outputs["queueLogits"], queue_targets, queue_mask)
 
