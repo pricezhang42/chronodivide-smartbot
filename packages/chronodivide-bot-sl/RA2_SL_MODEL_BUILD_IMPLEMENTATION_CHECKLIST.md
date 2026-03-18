@@ -9,7 +9,7 @@ Related design note:
 ## Status Summary
 
 - `[x]` Model-build plan written
-- `[ ]` Section-aware model dataset implemented
+- `[x]` Section-aware model dataset implemented
 - `[ ]` Baseline RA2 SL model implemented
 - `[ ]` Masked SL losses implemented
 - `[ ]` Trainer implemented
@@ -32,28 +32,28 @@ Related design note:
 
 ## Phase 1: Dataset And Batch Layer
 
-- `[ ]` Create `model_lib/` package under `chronodivide-bot-sl`.
-- `[ ]` Add `model_lib/dataset.py`.
-- `[ ]` Add `model_lib/batch.py`.
-- `[ ]` Add `model_lib/__init__.py`.
-- `[ ]` Implement shard discovery over generated tensor outputs.
-- `[ ]` Load `.sections.pt` sidecars directly for model inputs.
-- `[ ]` Load `.training.pt` sidecars directly for targets and masks.
-- `[ ]` Load `.meta.json` for schema and run metadata.
-- `[ ]` Expose a sample object with:
+- `[x]` Create `model_lib/` package under `chronodivide-bot-sl`.
+- `[x]` Add `model_lib/dataset.py`.
+- `[x]` Add `model_lib/batch.py`.
+- `[x]` Add `model_lib/__init__.py`.
+- `[x]` Implement shard discovery over generated tensor outputs.
+- `[x]` Load `.sections.pt` sidecars directly for model inputs.
+- `[x]` Load `.training.pt` sidecars directly for targets and masks.
+- `[x]` Load `.meta.json` for schema and run metadata.
+- `[x]` Expose a sample object with:
   - feature sections
   - label sections
   - training targets
   - training masks
   - replay/player metadata
-- `[ ]` Implement a collate function that preserves:
+- `[x]` Implement a collate function that preserves:
   - scalar sections
   - entity tensors and masks
   - spatial / minimap / mapStatic tensors
   - per-slot selected-unit masks
   - per-head loss masks
-- `[ ]` Verify dataloader batch shapes on a real saved shard.
-- `[ ]` Add a small inspection script that prints:
+- `[x]` Verify dataloader batch shapes on a real saved shard.
+- `[x]` Add a small inspection script that prints:
   - feature section names and shapes
   - target section names and shapes
   - mask coverage per head
