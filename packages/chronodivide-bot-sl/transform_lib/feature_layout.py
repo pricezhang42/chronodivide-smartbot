@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from action_dict import ACTION_TYPE_ID_TO_NAME, PLACE_BUILDING_NAMES, QUEUE_ITEM_NAMES
@@ -73,6 +74,38 @@ OWNED_COMPOSITION_NAME_TO_ID = {
     name: index for index, name in enumerate(OWNED_COMPOSITION_VOCABULARY)
 }
 OWNED_COMPOSITION_ROW_NAMES = ["units", "buildings"]
+IDENTITY_UNKNOWN_NAME = "<unk>"
+SIDE_ID_TO_NAME = {
+    0: "GDI",
+    1: "Nod",
+    2: "ThirdSide",
+    3: "Civilian",
+    4: "Mutant",
+}
+SIDE_VOCABULARY = [
+    IDENTITY_UNKNOWN_NAME,
+    *[SIDE_ID_TO_NAME[index] for index in sorted(SIDE_ID_TO_NAME)],
+]
+SIDE_NAME_TO_ID = {name: index for index, name in enumerate(SIDE_VOCABULARY)}
+COUNTRY_VOCABULARY = [
+    IDENTITY_UNKNOWN_NAME,
+    "Americans",
+    "Alliance",
+    "Koreans",
+    "French",
+    "Germans",
+    "British",
+    "Africans",
+    "Libyans",
+    "Arabs",
+    "Iraqis",
+    "Confederation",
+    "Cubans",
+    "Russians",
+    "YuriCountry",
+    "Yuri",
+]
+COUNTRY_NAME_TO_ID = {name: index for index, name in enumerate(COUNTRY_VOCABULARY)}
 
 
 def build_feature_layout_v1_contract() -> dict[str, object]:
@@ -115,6 +148,69 @@ def _normalize_owned_object_name(name: str | None) -> str:
     if not name or name in {"<pad>", "<unk>"}:
         return OWNED_COMPOSITION_UNKNOWN_NAME
     return name
+
+
+def _identity_suffix(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_") or "unknown"
+
+
+def _find_replay_player(dataset: dict[str, Any], player_name: str) -> dict[str, Any] | None:
+    for replay_player in dataset.get("replay", {}).get("players", []):
+        if replay_player.get("name") == player_name:
+            return replay_player
+    return None
+
+
+def _build_enemy_replay_players(dataset: dict[str, Any], player_name: str) -> list[dict[str, Any]]:
+    replay_players = list(dataset.get("replay", {}).get("players", []))
+    self_player = _find_replay_player(dataset, player_name)
+    enemy_players = [player for player in replay_players if player.get("name") != player_name]
+    if not self_player:
+        return enemy_players
+
+    self_team_id = self_player.get("teamId")
+    team_filtered = [
+        player
+        for player in enemy_players
+        if self_team_id is not None and player.get("teamId") is not None and player.get("teamId") != self_team_id
+    ]
+    if team_filtered:
+        return team_filtered
+    return enemy_players
+
+
+def _side_bucket_name(player: dict[str, Any] | None) -> str:
+    if not player:
+        return IDENTITY_UNKNOWN_NAME
+    side_id = player.get("sideId")
+    if side_id is None:
+        return IDENTITY_UNKNOWN_NAME
+    return SIDE_ID_TO_NAME.get(int(side_id), IDENTITY_UNKNOWN_NAME)
+
+
+def _country_bucket_name(player: dict[str, Any] | None) -> str:
+    if not player:
+        return IDENTITY_UNKNOWN_NAME
+    country_name = player.get("countryName")
+    if isinstance(country_name, str) and country_name in COUNTRY_NAME_TO_ID:
+        return country_name
+    return IDENTITY_UNKNOWN_NAME
+
+
+def _one_hot(bucket_name: str, vocabulary_size: int, name_to_id: dict[str, int]) -> list[float]:
+    values = [0.0] * vocabulary_size
+    values[name_to_id.get(bucket_name, 0)] = 1.0
+    return values
+
+
+def _multi_hot(players: list[dict[str, Any]], vocabulary_size: int, bucket_fn: Any, name_to_id: dict[str, int]) -> list[float]:
+    values = [0.0] * vocabulary_size
+    if not players:
+        values[0] = 1.0
+        return values
+    for player in players:
+        values[name_to_id.get(bucket_fn(player), 0)] = 1.0
+    return values
 
 
 def _sum_spatial_channel(sample: dict[str, Any], schema: dict[str, Any], channel_name: str) -> float:
@@ -292,6 +388,19 @@ def build_owned_composition_bow(sample: dict[str, Any], dataset: dict[str, Any])
     return [unit_counts, building_counts]
 
 
+def build_scalar_core_identity(sample: dict[str, Any], dataset: dict[str, Any]) -> list[float]:
+    player_name = str(sample["playerName"])
+    self_player = _find_replay_player(dataset, player_name)
+    enemy_players = _build_enemy_replay_players(dataset, player_name)
+
+    return [
+        *_one_hot(_side_bucket_name(self_player), len(SIDE_VOCABULARY), SIDE_NAME_TO_ID),
+        *_multi_hot(enemy_players, len(SIDE_VOCABULARY), _side_bucket_name, SIDE_NAME_TO_ID),
+        *_one_hot(_country_bucket_name(self_player), len(COUNTRY_VOCABULARY), COUNTRY_NAME_TO_ID),
+        *_multi_hot(enemy_players, len(COUNTRY_VOCABULARY), _country_bucket_name, COUNTRY_NAME_TO_ID),
+    ]
+
+
 def augment_dataset_with_available_action_mask(dataset: dict[str, Any]) -> None:
     samples = dataset.get("samples", [])
     append_schema_section(
@@ -363,3 +472,65 @@ def augment_dataset_with_owned_composition_bow(dataset: dict[str, Any]) -> None:
 
     for sample in samples:
         sample["featureTensors"]["ownedCompositionBow"] = build_owned_composition_bow(sample, dataset)
+
+
+def augment_dataset_with_scalar_core_identity(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    scalar_feature_names = list(dataset["schema"]["observation"]["scalarFeatureNames"])
+    if any(name.startswith("self_side_") for name in scalar_feature_names):
+        return
+
+    identity_feature_names = [
+        *[f"self_side_{_identity_suffix(name)}" for name in SIDE_VOCABULARY],
+        *[f"enemy_side_{_identity_suffix(name)}" for name in SIDE_VOCABULARY],
+        *[f"self_country_{_identity_suffix(name)}" for name in COUNTRY_VOCABULARY],
+        *[f"enemy_country_{_identity_suffix(name)}" for name in COUNTRY_VOCABULARY],
+    ]
+    dataset["schema"]["observation"]["scalarFeatureNames"] = scalar_feature_names + identity_feature_names
+
+    for section in dataset["schema"]["featureSections"]:
+        if section["name"] == "scalar":
+            section["shape"] = [len(dataset["schema"]["observation"]["scalarFeatureNames"])]
+            break
+    else:
+        raise KeyError("Feature schema is missing scalar section.")
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "scalarCore.factionIdentity",
+        }
+    )
+    feature_layout_v1["scalarCore"] = {
+        **feature_layout_v1.get("scalarCore", {}),
+        "identity": {
+            "version": "v0_country_side",
+            "selfSideEncoding": "one_hot",
+            "enemySideEncoding": "multi_hot_union",
+            "selfCountryEncoding": "one_hot",
+            "enemyCountryEncoding": "multi_hot_union",
+            "sideVocabulary": {
+                "idToName": list(SIDE_VOCABULARY),
+                "nameToId": dict(SIDE_NAME_TO_ID),
+                "unknownName": IDENTITY_UNKNOWN_NAME,
+            },
+            "countryVocabulary": {
+                "idToName": list(COUNTRY_VOCABULARY),
+                "nameToId": dict(COUNTRY_NAME_TO_ID),
+                "unknownName": IDENTITY_UNKNOWN_NAME,
+            },
+            "notes": [
+                "Identity features are derived from replay-global player metadata, not inferred from unit composition.",
+                "Enemy identity uses a multi-hot union across replay players not on the acting player's team.",
+                "When no opposing player metadata is available, the unknown enemy bucket is enabled.",
+            ],
+        },
+    }
+
+    for sample in samples:
+        sample["featureTensors"]["scalar"] = [
+            *sample["featureTensors"]["scalar"],
+            *build_scalar_core_identity(sample, dataset),
+        ]

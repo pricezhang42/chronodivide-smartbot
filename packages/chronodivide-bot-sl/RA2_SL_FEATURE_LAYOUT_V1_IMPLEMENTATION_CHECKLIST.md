@@ -202,15 +202,22 @@ It does not include:
 
 ## Phase 7: Priority 0 - Faction / Country Identity
 
-- `[ ]` Confirm which replay-global side / country / faction fields are reliably available.
+- `[x]` Confirm which replay-global side / country / faction fields are reliably available.
 
-- `[ ]` Add player identity features to `scalarCore`:
-  - self faction or country one-hot
-  - enemy faction or country one-hot if replay-global metadata safely provides it
+- `[x]` Add player identity features to `scalarCore`:
+  - self side one-hot
+  - enemy side multi-hot union over opposing replay players
+  - self country one-hot
+  - enemy country multi-hot union over opposing replay players if replay-global metadata safely provides it
 
-- `[ ]` Document the exact identity policy.
+- `[x]` Document the exact identity policy.
   Recommendation:
   - use replay metadata, not inferred unit composition
+  Current V1 policy:
+  - use replay-global `countryName` and `sideId` metadata
+  - self identity is one-hot
+  - enemy identity is a multi-hot union across replay players not on the acting player's team
+  - unknown buckets are used when metadata is missing
 
 ## Phase 8: Priority 1 - `buildOrderTrace`
 

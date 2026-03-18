@@ -80,8 +80,10 @@ Keep:
 
 Add:
 
-- player faction / country one-hot
-- enemy faction / country one-hot if replay-global metadata allows it
+- self side one-hot
+- enemy side multi-hot union over opposing replay players
+- self country one-hot
+- enemy country multi-hot union over opposing replay players if replay-global metadata allows it
 - number of owned production buildings by category
 - number of owned tech buildings by category
 - number of currently buildable placement options
@@ -90,6 +92,8 @@ Add:
 Why:
 
 - this becomes the RA2 equivalent of the richer mAS scalar branch
+- self / enemy side is the closest RA2 analogue to mAS `home_race` / `away_race`
+- country identity adds sub-faction detail that matters for build options and bonuses
 
 ### 2. `lastActionContext`
 

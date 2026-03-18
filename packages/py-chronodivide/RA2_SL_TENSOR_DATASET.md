@@ -13,6 +13,14 @@ Provide a reusable replay-to-tensor API that is closer in role to mini-AlphaStar
 
 The implementation lives in [sl_dataset.mjs](D:/workspace/supalosa-chronodivide-bot/packages/py-chronodivide/sl_dataset.mjs).
 
+Replay metadata now also carries per-player replay-global identity fields alongside the action-aligned samples:
+
+- `countryId`
+- `countryName`
+- `sideId`
+
+These are intended for downstream feature builders such as SL scalar identity features.
+
 ## Extraction Model
 
 The dataset is action-centric.

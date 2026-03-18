@@ -161,6 +161,8 @@ export function buildReplayMetadata(context) {
     players: context.replay.gameOpts.humanPlayers.map((player) => ({
       name: player.name,
       countryId: player.countryId,
+      countryName: context.gameApi.getPlayerData(player.name)?.country?.name ?? null,
+      sideId: context.gameApi.getPlayerData(player.name)?.country?.side ?? null,
       colorId: player.colorId,
       startPos: player.startPos,
       teamId: player.teamId,

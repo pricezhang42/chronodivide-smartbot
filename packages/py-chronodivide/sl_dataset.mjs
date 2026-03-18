@@ -6,7 +6,7 @@ import {
   shouldKeepRawActionId,
   updateSelectionFromAction,
 } from "./labels.mjs";
-import { createReplayResimContext } from "./resim_core.mjs";
+import { buildReplayMetadata, createReplayResimContext } from "./resim_core.mjs";
 
 const DEFAULT_LAST_ACTION_RAW_ID = -1;
 const DEFAULT_LAST_ACTION_FAMILY_ID = -1;
@@ -50,22 +50,6 @@ function flattenNestedNumbers(value) {
   }
 
   return flattened.reverse();
-}
-
-function buildReplaySummary(context) {
-  return {
-    path: context.replayPath,
-    gameId: context.replay.gameId,
-    mapName: context.replay.gameOpts.mapName,
-    endTick: context.replay.endTick,
-    players: context.replay.gameOpts.humanPlayers.map((player) => ({
-      name: player.name,
-      countryId: player.countryId,
-      colorId: player.colorId,
-      startPos: player.startPos,
-      teamId: player.teamId,
-    })),
-  };
 }
 
 function buildActionCounts(samples) {
@@ -602,7 +586,7 @@ export async function extractReplaySupervisedDataset({
   );
 
   return {
-    replay: buildReplaySummary(context),
+    replay: buildReplayMetadata(context),
     sampledPlayers,
     options: {
       includeNoAction,
