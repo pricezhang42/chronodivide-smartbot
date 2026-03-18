@@ -69,6 +69,7 @@ from transform_lib.feature_layout import (
     augment_dataset_with_available_action_mask,
     augment_dataset_with_build_order_trace,
     augment_dataset_with_enemy_memory_bow,
+    augment_dataset_with_entity_intent_summary,
     augment_dataset_with_map_static,
     augment_dataset_with_owned_composition_bow,
     augment_dataset_with_production_state,
@@ -437,6 +438,7 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
     augment_dataset_with_production_state(dataset)
     augment_dataset_with_super_weapon_state(dataset)
     augment_dataset_with_enemy_memory_bow(dataset)
+    augment_dataset_with_entity_intent_summary(dataset)
     augment_dataset_with_map_static(dataset)
     dataset["filterConfig"] = build_filter_config(config)
     grouped_samples = group_samples_by_player(dataset.get("samples", []))

@@ -83,6 +83,17 @@ Current feature tensors contain:
 
 The observation part comes from the existing safe feature extractor.
 
+The raw entity feature block now also carries a small set of generic transient fields that downstream projects can use to build their own intent summaries:
+
+- `factory_status_idle`
+- `factory_status_delivering`
+- `factory_has_delivery`
+- `rally_point_valid`
+- `rally_x_norm`
+- `rally_y_norm`
+- `primary_weapon_cooldown_ticks`
+- `secondary_weapon_cooldown_ticks`
+
 The added SL-specific context is:
 
 - previous kept action delay / raw action id / family id / queue flag

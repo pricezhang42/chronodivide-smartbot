@@ -102,6 +102,14 @@ const ENTITY_FEATURE_NAMES_BASE = [
   "ammo",
   "is_warped_out",
   "tnt_timer",
+  "factory_status_idle",
+  "factory_status_delivering",
+  "factory_has_delivery",
+  "rally_point_valid",
+  "rally_x_norm",
+  "rally_y_norm",
+  "primary_weapon_cooldown_ticks",
+  "secondary_weapon_cooldown_ticks",
 ];
 
 const SPATIAL_CHANNEL_NAMES = [
@@ -449,6 +457,10 @@ function encodeUnit(unit, relation, map) {
   const [turretSin, turretCos] = angleToSinCos(unit.turretFacing);
   const buildStatus = optionalOneHotFromIndex(unit.buildStatus, 3);
   const attackState = optionalOneHotFromIndex(unit.attackState, 6);
+  const factoryStatus = optionalOneHotFromIndex(unit.factory?.status, 2);
+  const rallyPoint = unit.rallyPoint ? tileToGrid(unit.rallyPoint, map, 1024) : null;
+  const primaryWeaponCooldownTicks = safeNumber(unit.primaryWeapon?.cooldownTicks);
+  const secondaryWeaponCooldownTicks = safeNumber(unit.secondaryWeapon?.cooldownTicks);
 
   return {
     features: [
@@ -487,6 +499,13 @@ function encodeUnit(unit, relation, map) {
       safeNumber(unit.ammo),
       boolToNumber(unit.isWarpedOut),
       safeNumber(unit.tntTimer),
+      ...factoryStatus,
+      boolToNumber(Number.isFinite(unit.factory?.deliveringUnit)),
+      boolToNumber(Boolean(rallyPoint)),
+      rallyPoint?.normalizedX ?? 0,
+      rallyPoint?.normalizedY ?? 0,
+      primaryWeaponCooldownTicks,
+      secondaryWeaponCooldownTicks,
     ],
     meta: {
       id: unit.id,

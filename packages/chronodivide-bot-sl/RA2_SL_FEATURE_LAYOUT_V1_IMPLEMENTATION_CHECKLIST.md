@@ -170,7 +170,12 @@ It does not include:
   - per-action disable frequency
   - top action types that are almost always disabled or always enabled
 
-- `[x]` Validate on representative replays that actually observed action types are almost always enabled at the action step.
+- `[~]` Validate on representative replays that actually observed action types are almost always enabled at the action step.
+  Current state:
+  - the new `audit_feature_tensors.py` checks chosen-action compatibility against `availableActionMask`
+  - on `entity_intent_smoke_20260318`, the audit found many chosen actions still disabled by the current conservative mask
+  - current misses include `Order::DeploySelected::*`, `Queue::Add::*`, and `PlaceBuilding::*`
+  - this means the current first-pass mask is implemented and audit-covered, but not yet correct enough to call done
 
 ## Phase 6: Priority 0 - `ownedCompositionBow`
 
@@ -441,21 +446,70 @@ It does not include:
 
 ## Phase 14: Entity Intent / Order Summaries
 
-- `[ ]` Add compact intent features to the entity branch.
+- `[x]` Add compact intent features to the entity branch.
   Suggested first pass:
   - current mission or order type
   - current order target mode
   - current order progress
   - weapon cooldown / ready summary
   - rally-intent summary for production buildings
+  Current V1 policy:
+  - `py-chronodivide` now appends generic raw transient entity fields:
+    - `factory_status_idle`
+    - `factory_status_delivering`
+    - `factory_has_delivery`
+    - `rally_point_valid`
+    - `rally_x_norm`
+    - `rally_y_norm`
+    - `primary_weapon_cooldown_ticks`
+    - `secondary_weapon_cooldown_ticks`
+  - `chronodivide-bot-sl` now derives compact summary fields from those raw signals:
+    - `intent_idle`
+    - `intent_move`
+    - `intent_attack`
+    - `intent_build`
+    - `intent_harvest`
+    - `intent_repair`
+    - `intent_factory_delivery`
+    - `intent_rally_point_valid`
+    - `intent_target_mode_none`
+    - `intent_target_mode_tile`
+    - `intent_target_mode_object`
+    - `intent_target_mode_resource`
+    - `intent_progress_01`
+    - `weapon_ready_any`
+    - `weapon_cooldown_progress_01`
+    - `intent_rally_distance_norm`
 
-- `[ ]` Keep this generic in `py-chronodivide` if it depends on generic object state, but keep SL-specific encoding decisions in `chronodivide-bot-sl`.
+- `[x]` Keep this generic in `py-chronodivide` if it depends on generic object state, but keep SL-specific encoding decisions in `chronodivide-bot-sl`.
+  Current V1 split:
+  - raw transient entity fields are exported generically in `py-chronodivide`
+  - heuristic intent encoding stays in `chronodivide-bot-sl`
+  - no hidden or omniscient enemy state is used to derive these summaries
 
-- `[ ]` Validate that these summaries help explain observed next actions in:
+- `[~]` Validate that these summaries help explain observed next actions in:
   - movement chains
   - combat focus-fire
   - harvest cycles
   - production and rally behavior
+  Current state:
+  - replay smoke validation completed on `00758dde-b725-4442-ae8f-a657069251a0.rpl`
+  - saved `entityFeatures` width increased and the new summary channels were present in the shard schema
+  - real nonzero summary examples appeared for:
+    - `intent_attack`
+    - `intent_build`
+    - `intent_factory_delivery`
+    - `intent_target_mode_object`
+    - `intent_progress_01`
+    - `weapon_ready_any`
+    - `weapon_cooldown_progress_01`
+  - several channels stayed zero on this opening-focused slice, including:
+    - `intent_move`
+    - `intent_harvest`
+    - `intent_repair`
+    - `intent_rally_point_valid`
+  - that looks plausible for this replay slice, but broader replay-motif coverage is still needed
+  - broader usefulness validation across replay motifs still remains
 
 ## Phase 15: Upgrade The Current Selection Summary
 
@@ -482,26 +536,47 @@ It does not include:
 
 ## Phase 17: Feature Audits And Sanity Checks
 
-- `[ ]` Add a dedicated feature audit script analogous to `audit_training_targets.py`.
+- `[x]` Add a dedicated feature audit script analogous to `audit_training_targets.py`.
+  Current state:
+  - `audit_feature_tensors.py` now audits saved `.pt` and `.sections.pt` shards from a transform run
 
-- `[ ]` Audit section presence, shapes, dtypes, and flatten consistency.
+- `[x]` Audit section presence, shapes, dtypes, and flatten consistency.
+  Current state:
+  - the audit checks section presence, tensor shapes, section dtypes, and flat-vs-structured feature consistency against the saved flat shard
 
-- `[ ]` Audit sparsity / density for:
+- `[x]` Audit sparsity / density for:
   - `availableActionMask`
   - `ownedCompositionBow`
   - `enemyMemoryBow`
   - `buildOrderTrace`
   - `techState`
   - `productionState`
+  Current state:
+  - the audit now writes section-density summaries and top-activation summaries for these sections into `feature_tensor_audit.json`
 
-- `[ ]` Audit value ranges for:
+- `[x]` Audit value ranges for:
   - scalar counts
   - ratios
   - map channels
   - entity-intent fields
+  Current state:
+  - the audit now checks representative range invariants for:
+    - scalar fractions
+    - map-static constancy
+    - non-negative spatial/minimap/mapStatic channels
+    - production progress
+    - super-weapon charge progress
+    - entity-intent normalized fields
 
-- `[ ]` Audit leak safety:
+- `[~]` Audit leak safety:
   - no hidden enemy-state dependence in feature sections that claim to be observation-safe
+  Current state:
+  - the audit now checks a few observation-safe invariants:
+    - chosen action enabled by `availableActionMask`
+    - `enemyMemoryBow` monotonicity
+    - `enemyMemoryTechFlags` monotonicity
+    - `mapStatic` constancy within a shard
+  - broader hidden-state leak proof is still partly a code-path review task, not something the saved tensors can prove by themselves
 
 ## Phase 18: Replay-Level Validation
 

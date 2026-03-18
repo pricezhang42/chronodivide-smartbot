@@ -455,6 +455,43 @@ Why:
 - SC2 raw units expose current orders, order progress, rally targets, and weapon cooldown
 - RA2 should carry a compact analogue so the model sees current intent, not just current state
 
+Current V1 policy:
+
+- keep the main `entityFeatures` tensor as the canonical entity branch
+- expose a few extra generic raw transient fields from `py-chronodivide`:
+  - `factory_status_idle`
+  - `factory_status_delivering`
+  - `factory_has_delivery`
+  - `rally_point_valid`
+  - `rally_x_norm`
+  - `rally_y_norm`
+  - `primary_weapon_cooldown_ticks`
+  - `secondary_weapon_cooldown_ticks`
+- append a compact derived intent summary to each entity row in `chronodivide-bot-sl`
+- V1 appended intent features are:
+  - `intent_idle`
+  - `intent_move`
+  - `intent_attack`
+  - `intent_build`
+  - `intent_harvest`
+  - `intent_repair`
+  - `intent_factory_delivery`
+  - `intent_rally_point_valid`
+  - `intent_target_mode_none`
+  - `intent_target_mode_tile`
+  - `intent_target_mode_object`
+  - `intent_target_mode_resource`
+  - `intent_progress_01`
+  - `weapon_ready_any`
+  - `weapon_cooldown_progress_01`
+  - `intent_rally_distance_norm`
+
+Notes:
+
+- Chronodivide does not currently expose a clean generic current-order or mission field, so V1 uses heuristic intent categories derived from observation-safe transient state.
+- This is meant to be a compact analogue to SC2 order summaries, not a claim of exact hidden engine intent.
+- `weapon_cooldown_progress_01` uses a fixed 90-tick clamp in V1 as a generic readiness proxy.
+
 ### 12. `spatial`
 
 Keep the current spatial channels:

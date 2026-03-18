@@ -230,6 +230,25 @@ ENEMY_MEMORY_TECH_FLAG_NAMES = [
     "seen_enemy_unlocks_tier2",
     "seen_enemy_unlocks_tier3",
 ]
+ENTITY_INTENT_SUMMARY_FEATURE_NAMES = [
+    "intent_idle",
+    "intent_move",
+    "intent_attack",
+    "intent_build",
+    "intent_harvest",
+    "intent_repair",
+    "intent_factory_delivery",
+    "intent_rally_point_valid",
+    "intent_target_mode_none",
+    "intent_target_mode_tile",
+    "intent_target_mode_object",
+    "intent_target_mode_resource",
+    "intent_progress_01",
+    "weapon_ready_any",
+    "weapon_cooldown_progress_01",
+    "intent_rally_distance_norm",
+]
+ENTITY_INTENT_WEAPON_COOLDOWN_CLAMP_TICKS = 90.0
 
 
 def build_feature_layout_v1_contract() -> dict[str, object]:
@@ -249,6 +268,14 @@ def build_feature_layout_v1_contract() -> dict[str, object]:
 def _feature_name_index(schema: dict[str, Any], feature_name: str) -> int:
     entity_feature_names = schema["observation"]["entityFeatureNames"]
     return int(entity_feature_names.index(feature_name))
+
+
+def _optional_feature_name_index(schema: dict[str, Any], feature_name: str) -> int | None:
+    entity_feature_names = schema["observation"]["entityFeatureNames"]
+    try:
+        return int(entity_feature_names.index(feature_name))
+    except ValueError:
+        return None
 
 
 def _scalar_name_index(schema: dict[str, Any], feature_name: str) -> int:
@@ -331,6 +358,22 @@ def _safe_optional_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return numeric if numeric >= 0.0 else None
+
+
+def _entity_row_value(feature_row: Any, index: int | None, fallback: float = 0.0) -> float:
+    if index is None:
+        return float(fallback)
+    return _safe_float(feature_row[index], fallback)
+
+
+def _update_entity_feature_section_shape(dataset: dict[str, Any]) -> None:
+    entity_feature_count = len(dataset["schema"]["observation"]["entityFeatureNames"])
+    for section in dataset["schema"]["featureSections"]:
+        if section["name"] == "entityFeatures":
+            section["shape"] = [int(section["shape"][0]), entity_feature_count]
+            break
+    else:
+        raise KeyError("Feature schema is missing entityFeatures section.")
 
 
 def _find_replay_player(dataset: dict[str, Any], player_name: str) -> dict[str, Any] | None:
@@ -451,6 +494,157 @@ def _collect_enemy_entities(sample: dict[str, Any], dataset: dict[str, Any]) -> 
             }
         )
     return entities
+
+
+def _normalized_cooldown_progress(min_cooldown_ticks: float, has_weapon_signal: bool) -> float:
+    if not has_weapon_signal:
+        return 0.0
+    if min_cooldown_ticks <= 0.0:
+        return 1.0
+    return max(
+        0.0,
+        1.0 - min(min_cooldown_ticks, ENTITY_INTENT_WEAPON_COOLDOWN_CLAMP_TICKS) / ENTITY_INTENT_WEAPON_COOLDOWN_CLAMP_TICKS,
+    )
+
+
+def _build_entity_intent_summary_row(feature_row: Any, entity_name: str | None, schema: dict[str, Any]) -> list[float]:
+    object_building_index = _feature_name_index(schema, "object_building")
+    is_idle_index = _feature_name_index(schema, "is_idle")
+    can_move_index = _feature_name_index(schema, "can_move")
+    build_status_build_up_index = _feature_name_index(schema, "build_status_build_up")
+    build_status_build_down_index = _feature_name_index(schema, "build_status_build_down")
+    attack_state_check_range_index = _feature_name_index(schema, "attack_state_check_range")
+    attack_state_prepare_to_fire_index = _feature_name_index(schema, "attack_state_prepare_to_fire")
+    attack_state_fire_up_index = _feature_name_index(schema, "attack_state_fire_up")
+    attack_state_firing_index = _feature_name_index(schema, "attack_state_firing")
+    attack_state_just_fired_index = _feature_name_index(schema, "attack_state_just_fired")
+    has_wrench_repair_index = _feature_name_index(schema, "has_wrench_repair")
+    harvested_ore_index = _feature_name_index(schema, "harvested_ore")
+    harvested_gems_index = _feature_name_index(schema, "harvested_gems")
+    hit_points_ratio_index = _feature_name_index(schema, "hit_points_ratio")
+    tile_x_norm_index = _feature_name_index(schema, "tile_x_norm")
+    tile_y_norm_index = _feature_name_index(schema, "tile_y_norm")
+    factory_status_delivering_index = _optional_feature_name_index(schema, "factory_status_delivering")
+    factory_has_delivery_index = _optional_feature_name_index(schema, "factory_has_delivery")
+    rally_point_valid_index = _optional_feature_name_index(schema, "rally_point_valid")
+    rally_x_norm_index = _optional_feature_name_index(schema, "rally_x_norm")
+    rally_y_norm_index = _optional_feature_name_index(schema, "rally_y_norm")
+    primary_weapon_cooldown_ticks_index = _optional_feature_name_index(schema, "primary_weapon_cooldown_ticks")
+    secondary_weapon_cooldown_ticks_index = _optional_feature_name_index(schema, "secondary_weapon_cooldown_ticks")
+    ammo_index = _feature_name_index(schema, "ammo")
+
+    is_building = _entity_row_value(feature_row, object_building_index) > 0.5
+    is_idle = _entity_row_value(feature_row, is_idle_index) > 0.5
+    can_move = _entity_row_value(feature_row, can_move_index) > 0.5
+    build_active = (
+        _entity_row_value(feature_row, build_status_build_up_index) > 0.5
+        or _entity_row_value(feature_row, build_status_build_down_index) > 0.5
+    )
+    attack_active = any(
+        _entity_row_value(feature_row, index) > 0.5
+        for index in [
+            attack_state_check_range_index,
+            attack_state_prepare_to_fire_index,
+            attack_state_fire_up_index,
+            attack_state_firing_index,
+            attack_state_just_fired_index,
+        ]
+    )
+    has_repair_signal = _entity_row_value(feature_row, has_wrench_repair_index) > 0.5
+    harvest_load = _entity_row_value(feature_row, harvested_ore_index) + _entity_row_value(feature_row, harvested_gems_index)
+    is_harvester = bool(entity_name and entity_name in HARVESTER_NAMES)
+    harvest_active = is_harvester and harvest_load > 0.0
+    factory_delivery_active = (
+        _entity_row_value(feature_row, factory_status_delivering_index) > 0.5
+        or _entity_row_value(feature_row, factory_has_delivery_index) > 0.5
+    )
+    rally_point_valid = _entity_row_value(feature_row, rally_point_valid_index) > 0.5
+    moving_active = can_move and not is_idle and not attack_active and not build_active and not harvest_active
+    repair_active = (
+        has_repair_signal
+        and not is_idle
+        and not attack_active
+        and not build_active
+        and not harvest_active
+        and not factory_delivery_active
+    )
+
+    target_mode_resource = harvest_active
+    target_mode_object = attack_active or repair_active or factory_delivery_active
+    target_mode_tile = moving_active or (is_building and rally_point_valid)
+    target_mode_none = not (target_mode_resource or target_mode_object or target_mode_tile)
+
+    primary_cooldown_ticks = max(_entity_row_value(feature_row, primary_weapon_cooldown_ticks_index), 0.0)
+    secondary_cooldown_ticks = max(_entity_row_value(feature_row, secondary_weapon_cooldown_ticks_index), 0.0)
+    positive_cooldowns = [value for value in [primary_cooldown_ticks, secondary_cooldown_ticks] if value > 0.0]
+    min_cooldown_ticks = min(positive_cooldowns) if positive_cooldowns else 0.0
+    has_weapon_signal = bool(
+        positive_cooldowns
+        or attack_active
+        or _entity_row_value(feature_row, ammo_index) > 0.0
+    )
+    weapon_ready_any = 1.0 if has_weapon_signal and min_cooldown_ticks <= 0.0 else 0.0
+    weapon_cooldown_progress_01 = _normalized_cooldown_progress(min_cooldown_ticks, has_weapon_signal)
+
+    rally_distance_norm = 0.0
+    if rally_point_valid:
+        rally_distance_norm = min(
+            1.0,
+            (
+                (_entity_row_value(feature_row, rally_x_norm_index) - _entity_row_value(feature_row, tile_x_norm_index)) ** 2
+                + (_entity_row_value(feature_row, rally_y_norm_index) - _entity_row_value(feature_row, tile_y_norm_index)) ** 2
+            )
+            ** 0.5,
+        )
+
+    if build_active:
+        intent_progress_01 = min(1.0, max(0.0, _entity_row_value(feature_row, hit_points_ratio_index)))
+    elif attack_active:
+        intent_progress_01 = weapon_cooldown_progress_01
+    elif factory_delivery_active:
+        intent_progress_01 = 1.0
+    elif harvest_active or moving_active or repair_active:
+        intent_progress_01 = 0.5
+    else:
+        intent_progress_01 = 0.0
+
+    intent_idle = 1.0 if is_idle and not (build_active or attack_active or harvest_active or repair_active or factory_delivery_active) else 0.0
+
+    return [
+        intent_idle,
+        1.0 if moving_active else 0.0,
+        1.0 if attack_active else 0.0,
+        1.0 if build_active else 0.0,
+        1.0 if harvest_active else 0.0,
+        1.0 if repair_active else 0.0,
+        1.0 if factory_delivery_active else 0.0,
+        1.0 if rally_point_valid else 0.0,
+        1.0 if target_mode_none else 0.0,
+        1.0 if target_mode_tile else 0.0,
+        1.0 if target_mode_object else 0.0,
+        1.0 if target_mode_resource else 0.0,
+        intent_progress_01,
+        weapon_ready_any,
+        weapon_cooldown_progress_01,
+        rally_distance_norm,
+    ]
+
+
+def build_entity_intent_summary(sample: dict[str, Any], dataset: dict[str, Any]) -> list[list[float]]:
+    schema = dataset["schema"]
+    entity_mask = sample["featureTensors"]["entityMask"]
+    entity_names = sample["featureTensors"]["entityNameTokens"]
+    entity_features = sample["featureTensors"]["entityFeatures"]
+    intent_rows: list[list[float]] = []
+
+    for entity_index, feature_row in enumerate(entity_features):
+        if int(entity_mask[entity_index]) == 0:
+            intent_rows.append([0.0] * len(ENTITY_INTENT_SUMMARY_FEATURE_NAMES))
+            continue
+        entity_name = _decode_name_token(schema, int(entity_names[entity_index]))
+        intent_rows.append(_build_entity_intent_summary_row(feature_row, entity_name, schema))
+
+    return intent_rows
 
 
 def _collect_selected_entities(sample: dict[str, Any], self_entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1238,6 +1432,74 @@ def augment_dataset_with_enemy_memory_bow(dataset: dict[str, Any]) -> None:
         sample["featureTensors"]["enemyMemoryTechFlags"] = build_enemy_memory_tech_flags(
             set(player_memory["seenBuildingNames"])
         )
+
+
+def augment_dataset_with_entity_intent_summary(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    entity_feature_names = dataset["schema"]["observation"]["entityFeatureNames"]
+    for feature_name in ENTITY_INTENT_SUMMARY_FEATURE_NAMES:
+        if feature_name not in entity_feature_names:
+            entity_feature_names.append(feature_name)
+
+    _update_entity_feature_section_shape(dataset)
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "entity.intentSummary",
+        }
+    )
+    feature_layout_v1["entityIntentSummary"] = {
+        "version": "v0_heuristic_compact_summary",
+        "appendedTo": "entityFeatures",
+        "featureNames": list(ENTITY_INTENT_SUMMARY_FEATURE_NAMES),
+        "weaponCooldownClampTicks": ENTITY_INTENT_WEAPON_COOLDOWN_CLAMP_TICKS,
+        "rawFeatureDependencies": [
+            "is_idle",
+            "can_move",
+            "build_status_build_up",
+            "build_status_build_down",
+            "attack_state_check_range",
+            "attack_state_prepare_to_fire",
+            "attack_state_fire_up",
+            "attack_state_firing",
+            "attack_state_just_fired",
+            "has_wrench_repair",
+            "harvested_ore",
+            "harvested_gems",
+            "hit_points_ratio",
+            "tile_x_norm",
+            "tile_y_norm",
+            "factory_status_delivering",
+            "factory_has_delivery",
+            "rally_point_valid",
+            "rally_x_norm",
+            "rally_y_norm",
+            "primary_weapon_cooldown_ticks",
+            "secondary_weapon_cooldown_ticks",
+            "ammo",
+        ],
+        "notes": [
+            "This is a compact RA2 analogue to SC2 per-unit order and cooldown summaries, built from observation-safe transient state only.",
+            "Chronodivide does not currently expose a clean generic current-order field, so V1 uses heuristic intent categories derived from attack/build/harvest/repair/factory/rally signals.",
+            "The summary is appended to the entity feature rows instead of creating a separate top-level branch.",
+            "weapon_cooldown_progress_01 uses a fixed 90-tick clamp in V1; this is a generic monotonic readiness proxy, not a weapon-specific perfect normalization.",
+        ],
+    }
+
+    for sample in samples:
+        base_entity_rows = sample["featureTensors"]["entityFeatures"]
+        intent_summary_rows = build_entity_intent_summary(sample, dataset)
+        augmented_rows: list[list[float]] = []
+        for base_row, intent_row in zip(base_entity_rows, intent_summary_rows):
+            if hasattr(base_row, "tolist"):
+                base_values = list(base_row.tolist())
+            else:
+                base_values = list(base_row)
+            augmented_rows.append([*base_values, *intent_row])
+        sample["featureTensors"]["entityFeatures"] = augmented_rows
 
 
 def augment_dataset_with_map_static(dataset: dict[str, Any]) -> None:
