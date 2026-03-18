@@ -249,6 +249,18 @@ ENTITY_INTENT_SUMMARY_FEATURE_NAMES = [
     "intent_rally_distance_norm",
 ]
 ENTITY_INTENT_WEAPON_COOLDOWN_CLAMP_TICKS = 90.0
+CURRENT_SELECTION_SUMMARY_FEATURE_NAMES = [
+    "selected_infantry_count",
+    "selected_vehicle_count",
+    "selected_aircraft_count",
+    "selected_building_count",
+    "selected_can_move",
+    "selected_can_attack",
+    "selected_can_deploy",
+    "selected_can_gather",
+    "selected_can_repair",
+    "selected_mixed_type",
+]
 
 
 def build_feature_layout_v1_contract() -> dict[str, object]:
@@ -445,8 +457,20 @@ def _sum_spatial_channel(sample: dict[str, Any], schema: dict[str, Any], channel
 def _collect_self_entities(sample: dict[str, Any], dataset: dict[str, Any]) -> list[dict[str, Any]]:
     schema = dataset["schema"]
     relation_self_index = _feature_name_index(schema, "relation_self")
+    object_aircraft_index = _feature_name_index(schema, "object_aircraft")
     object_building_index = _feature_name_index(schema, "object_building")
+    object_infantry_index = _feature_name_index(schema, "object_infantry")
+    object_vehicle_index = _feature_name_index(schema, "object_vehicle")
     can_move_index = _feature_name_index(schema, "can_move")
+    has_wrench_repair_index = _feature_name_index(schema, "has_wrench_repair")
+    ammo_index = _feature_name_index(schema, "ammo")
+    attack_state_check_range_index = _feature_name_index(schema, "attack_state_check_range")
+    attack_state_prepare_to_fire_index = _feature_name_index(schema, "attack_state_prepare_to_fire")
+    attack_state_fire_up_index = _feature_name_index(schema, "attack_state_fire_up")
+    attack_state_firing_index = _feature_name_index(schema, "attack_state_firing")
+    attack_state_just_fired_index = _feature_name_index(schema, "attack_state_just_fired")
+    primary_weapon_cooldown_ticks_index = _optional_feature_name_index(schema, "primary_weapon_cooldown_ticks")
+    secondary_weapon_cooldown_ticks_index = _optional_feature_name_index(schema, "secondary_weapon_cooldown_ticks")
 
     entity_mask = sample["featureTensors"]["entityMask"]
     entity_names = sample["featureTensors"]["entityNameTokens"]
@@ -459,12 +483,33 @@ def _collect_self_entities(sample: dict[str, Any], dataset: dict[str, Any]) -> l
         feature_row = entity_features[entity_index]
         if float(feature_row[relation_self_index]) <= 0.5:
             continue
+        entity_name = _decode_name_token(schema, int(entity_names[entity_index]))
+        can_attack = any(
+            _entity_row_value(feature_row, index) > 0.5
+            for index in [
+                attack_state_check_range_index,
+                attack_state_prepare_to_fire_index,
+                attack_state_fire_up_index,
+                attack_state_firing_index,
+                attack_state_just_fired_index,
+            ]
+        ) or any(
+            _entity_row_value(feature_row, index) > 0.0
+            for index in [ammo_index, primary_weapon_cooldown_ticks_index, secondary_weapon_cooldown_ticks_index]
+        )
         entities.append(
             {
                 "index": entity_index,
-                "name": _decode_name_token(schema, int(entity_names[entity_index])),
+                "name": entity_name,
+                "isAircraft": float(feature_row[object_aircraft_index]) > 0.5,
                 "isBuilding": float(feature_row[object_building_index]) > 0.5,
+                "isInfantry": float(feature_row[object_infantry_index]) > 0.5,
+                "isVehicle": float(feature_row[object_vehicle_index]) > 0.5,
                 "canMove": float(feature_row[can_move_index]) > 0.5,
+                "canAttack": bool(can_attack),
+                "canDeploy": bool(entity_name and entity_name in DEPLOYABLE_NAMES),
+                "canGather": bool(entity_name and entity_name in HARVESTER_NAMES),
+                "canRepair": _entity_row_value(feature_row, has_wrench_repair_index) > 0.5,
             }
         )
     return entities
@@ -662,6 +707,34 @@ def _collect_selected_entities(sample: dict[str, Any], self_entities: list[dict[
     return selected_entities
 
 
+def build_current_selection_summary(sample: dict[str, Any], dataset: dict[str, Any]) -> list[int]:
+    self_entities = _collect_self_entities(sample, dataset)
+    selected_entities = _collect_selected_entities(sample, self_entities)
+
+    infantry_count = sum(1 for entity in selected_entities if entity.get("isInfantry"))
+    vehicle_count = sum(1 for entity in selected_entities if entity.get("isVehicle"))
+    aircraft_count = sum(1 for entity in selected_entities if entity.get("isAircraft"))
+    building_count = sum(1 for entity in selected_entities if entity.get("isBuilding"))
+    other_count = max(0, len(selected_entities) - infantry_count - vehicle_count - aircraft_count - building_count)
+    mixed_type = sum(
+        int(count > 0)
+        for count in [infantry_count, vehicle_count, aircraft_count, building_count, other_count]
+    ) > 1
+
+    return [
+        infantry_count,
+        vehicle_count,
+        aircraft_count,
+        building_count,
+        int(any(entity.get("canMove") for entity in selected_entities)),
+        int(any(entity.get("canAttack") for entity in selected_entities)),
+        int(any(entity.get("canDeploy") for entity in selected_entities)),
+        int(any(entity.get("canGather") for entity in selected_entities)),
+        int(any(entity.get("canRepair") for entity in selected_entities)),
+        int(mixed_type),
+    ]
+
+
 def _available_object_names_by_queue(player_production: dict[str, Any]) -> dict[str, set[str]]:
     available_names_by_queue: dict[str, set[str]] = {}
     for entry in player_production.get("availableObjectsByQueueType", []):
@@ -693,39 +766,22 @@ def _queued_object_names(player_production: dict[str, Any]) -> set[str]:
 def _is_order_action_available(
     action_type_name: str,
     *,
+    has_self_entities: bool,
     has_selection: bool,
     has_selected_mobile: bool,
     has_selected_harvester: bool,
     has_selected_deployable: bool,
     selection_identity_unknown: bool,
 ) -> int:
-    if not has_selection:
-        return 0
+    del action_type_name
+    del has_selected_mobile
+    del has_selected_harvester
+    del has_selected_deployable
+    del selection_identity_unknown
 
-    _, order_type_name, target_mode_name = action_type_name.split("::", 2)
-
-    movement_like_orders = {
-        "Move",
-        "ForceMove",
-        "AttackMove",
-        "GuardArea",
-        "Dock",
-        "Gather",
-        "Repair",
-        "Scatter",
-        "EnterTransport",
-        "PlaceBomb",
-    }
-    if order_type_name in movement_like_orders and not selection_identity_unknown and not has_selected_mobile:
-        return 0
-
-    if order_type_name in {"Deploy", "DeploySelected"} and not selection_identity_unknown and not has_selected_deployable:
-        return 0
-
-    if order_type_name == "Gather" and not selection_identity_unknown and not has_selected_harvester:
-        return 0
-
-    return 1
+    if has_selection:
+        return 1
+    return 1 if has_self_entities else 0
 
 
 def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any]) -> list[int]:
@@ -742,6 +798,7 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
     structure_available_names = available_names_by_queue.get("Structures", set())
     available_object_names = set().union(*available_names_by_queue.values()) if available_names_by_queue else set()
     queued_object_names = _queued_object_names(player_production)
+    queue_count = int(_safe_float(player_production.get("queueCount"), 0.0))
     available_counts_by_name = {
         str(entry.get("queueTypeName")): _safe_float(entry.get("count"), 0.0)
         for entry in player_production.get("availableCountsByQueueType", [])
@@ -802,6 +859,7 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
         elif action_type_name.startswith("Order::"):
             enabled = _is_order_action_available(
                 action_type_name,
+                has_self_entities=has_self_entities,
                 has_selection=has_selection,
                 has_selected_mobile=has_selected_mobile,
                 has_selected_harvester=has_selected_harvester,
@@ -819,10 +877,12 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
                     ) else 0
             else:
                 if item_name == "<unk_item>":
-                    enabled = 1 if (queued_object_names or has_self_buildings) else 0
+                    enabled = 1 if (queued_object_names or queue_count > 0 or has_self_buildings) else 0
                 else:
                     enabled = 1 if (
-                        item_name in queued_object_names or (not queued_object_names and has_self_buildings)
+                        item_name in queued_object_names
+                        or queue_count > 0
+                        or (not queued_object_names and has_self_buildings)
                     ) else 0
         elif action_type_name.startswith("PlaceBuilding::"):
             building_name = action_type_name.split("::", 1)[1]
@@ -1156,6 +1216,40 @@ def augment_dataset_with_available_action_mask(dataset: dict[str, Any]) -> None:
 
     for sample in samples:
         sample["featureTensors"]["availableActionMask"] = build_available_action_mask(sample, dataset)
+
+
+def augment_dataset_with_current_selection_summary(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="currentSelectionSummary",
+        shape=[len(CURRENT_SELECTION_SUMMARY_FEATURE_NAMES)],
+        dtype="int32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "currentSelection.summary",
+        }
+    )
+    current_selection_meta = dict(feature_layout_v1.get("currentSelection", {}))
+    current_selection_meta["summary"] = {
+        "version": "v0_capability_summary",
+        "shape": [len(CURRENT_SELECTION_SUMMARY_FEATURE_NAMES)],
+        "featureNames": list(CURRENT_SELECTION_SUMMARY_FEATURE_NAMES),
+        "notes": [
+            "This section is derived from the currently resolved self selection, not from hidden or omniscient state.",
+            "Counts and capability flags can undercount if part of the selection could not be resolved into the current entity tensor.",
+            "selected_can_attack uses a conservative heuristic from visible entity weapon and attack-state signals.",
+        ],
+    }
+    feature_layout_v1["currentSelection"] = current_selection_meta
+
+    for sample in samples:
+        sample["featureTensors"]["currentSelectionSummary"] = build_current_selection_summary(sample, dataset)
 
 
 def augment_dataset_with_owned_composition_bow(dataset: dict[str, Any]) -> None:

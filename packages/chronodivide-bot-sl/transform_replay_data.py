@@ -68,6 +68,7 @@ from transform_lib.filtering import (
 from transform_lib.feature_layout import (
     augment_dataset_with_available_action_mask,
     augment_dataset_with_build_order_trace,
+    augment_dataset_with_current_selection_summary,
     augment_dataset_with_enemy_memory_bow,
     augment_dataset_with_entity_intent_summary,
     augment_dataset_with_map_static,
@@ -431,6 +432,7 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
     augment_dataset_with_label_layout_v1(dataset)
     register_dataset_action_types_globally(dataset, run_state)
     augment_dataset_with_feature_context_v1(dataset)
+    augment_dataset_with_current_selection_summary(dataset)
     augment_dataset_with_scalar_core_identity(dataset)
     augment_dataset_with_available_action_mask(dataset)
     augment_dataset_with_owned_composition_bow(dataset)

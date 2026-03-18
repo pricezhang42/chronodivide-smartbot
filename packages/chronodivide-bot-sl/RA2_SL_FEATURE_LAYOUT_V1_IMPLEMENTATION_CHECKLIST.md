@@ -121,7 +121,7 @@ It does not include:
   - uncertain actions may remain enabled
   - mask generation must not depend on hidden enemy state
   Current state:
-  - the mask is now built from current selection presence, current player production summaries, direct per-sample super-weapon state, and static action semantics
+  - the mask is now built from plausible self-controlled entity presence, current player production summaries, current queue state, direct per-sample super-weapon state, and static action semantics
   - chosen actions on the latest smoke validation are no longer disabled by the mask
 
 - `[ ]` Write the memory policy for enemy features.
@@ -177,7 +177,8 @@ It does not include:
   Current state:
   - `audit_feature_tensors.py` checks chosen-action compatibility against `availableActionMask`
   - after fixing deploy / queue-add / place-building gating, the smoke validation run at `available_action_fix_smoke2_20260318` reported `chosenActionDisabledCount = 0` for both saved shards
-  - the mask remains intentionally conservative: when selection identity is ambiguous, uncertain order actions stay enabled instead of producing false negatives
+  - the broader replay-level validation run at `feature_layout_v1_validation_5replays_fix_20260318` also reported `chosenActionMaskCompatible = true`
+  - the mask remains intentionally conservative: when selection or queue identity is ambiguous, uncertain actions stay enabled instead of producing false negatives
 
 ## Phase 6: Priority 0 - `ownedCompositionBow`
 
@@ -515,7 +516,7 @@ It does not include:
 
 ## Phase 15: Upgrade The Current Selection Summary
 
-- `[ ]` Add derived selection-summary scalars:
+- `[x]` Add derived selection-summary scalars:
   - selected infantry / vehicle / aircraft / building counts
   - selected can-move flag
   - selected can-attack flag
@@ -523,8 +524,18 @@ It does not include:
   - selected can-gather flag
   - selected can-repair flag
   - selected mixed-type flag
+  Current V1 policy:
+  - the transformer now emits a dedicated `currentSelectionSummary` section
+  - category counts are derived from the currently resolved self selection in the visible entity tensor
+  - `selected_can_attack` uses a conservative visible-signal heuristic from attack-state, ammo, and weapon-cooldown fields
+  - `selected_can_deploy` and `selected_can_gather` use known object-name sets
+  - `selected_can_repair` uses the visible `has_wrench_repair` signal
 
-- `[ ]` Validate that these summaries agree with `currentSelectionIndices` and object capabilities.
+- `[x]` Validate that these summaries agree with `currentSelectionIndices` and object capabilities.
+  Current state:
+  - `audit_feature_tensors.py` now rebuilds `currentSelectionSummary` directly from the saved `currentSelectionIndices`, `currentSelectionMask`, `currentSelectionResolvedMask`, `entityMask`, `entityNameTokens`, and `entityFeatures`
+  - the smoke validation run at `current_selection_summary_smoke_20260318` reported `Issues: 0`
+  - early real examples include resolved `AMCV` selections producing `selected_vehicle_count = 1`, `selected_can_move = 1`, and `selected_can_deploy = 1`
 
 ## Phase 16: Canonical Storage And Metadata
 
@@ -582,20 +593,46 @@ It does not include:
 
 ## Phase 18: Replay-Level Validation
 
-- `[ ]` Validate the final V1 feature layout on at least:
+- `[x]` Validate the final V1 feature layout on at least:
   - two maps
   - multiple factions
   - early-game openings
   - queue-heavy replays
   - combat-heavy replays
+  Current state:
+  - `validate_feature_layout_v1.py` now runs:
+    - `transform_replay_data.py`
+    - `audit_feature_tensors.py`
+    - `audit_training_targets.py`
+    and writes a single replay-level summary artifact
+  - the wider validation run at `feature_layout_v1_validation_5replays_fix_20260318` completed with:
+    - `5` replays
+    - `10` saved shards
+    - `4` distinct maps
+    - `2` distinct sides
+    - `4` distinct countries
+    - `432` total samples
+    - observed queue, combat, build, move, select, and super-weapon actions
+    - `0` transform errors
+    - `0` feature-audit issues
+    - `0` training-target-audit issues
 
-- `[ ]` Run representative action-step spot checks:
+- `[~]` Run representative action-step spot checks:
   - action availability vs chosen action
   - build-order trace vs opening sequence
   - techState vs unlocked actions
   - productionState vs queue updates
   - enemyMemoryBow vs visible scouting history
   - mapStatic vs map geometry
+  Current state:
+  - action availability vs chosen action is now covered at replay-slice scale by `validate_feature_layout_v1.py` through `audit_feature_tensors.py`
+  - earlier feature-specific smoke validations already covered:
+    - build-order trace on opening sequences
+    - techState early unlock progression
+    - productionState queue transitions
+    - enemy-memory monotonicity after first contact
+    - mapStatic differences across maps
+  - a broader manual spot-check pass across specific action steps is still worth doing, but this is no longer completely unvalidated
 
 ## Recommended Implementation Order
 

@@ -16,6 +16,11 @@ from typing import Any
 import torch
 
 from transform_lib.common import LABEL_LAYOUT_V1_MISSING_INT, schema_dtype_to_torch
+from transform_lib.feature_layout import (
+    CURRENT_SELECTION_SUMMARY_FEATURE_NAMES,
+    DEPLOYABLE_NAMES,
+    HARVESTER_NAMES,
+)
 
 
 def utc_now_iso() -> str:
@@ -195,6 +200,159 @@ def find_feature_indices(feature_names: list[str], names: list[str]) -> dict[str
     return {name: index_by_name[name] for name in names if name in index_by_name}
 
 
+def _decode_name_token(shared_vocab: dict[str, Any], token: int) -> str | None:
+    if token < 0:
+        return None
+    id_to_name = shared_vocab.get("idToName", [])
+    if 0 <= token < len(id_to_name):
+        name = id_to_name[token]
+        if isinstance(name, str):
+            return name
+    return None
+
+
+def _rebuild_current_selection_summary(
+    *,
+    feature_tensors: dict[str, torch.Tensor],
+    metadata: dict[str, Any],
+) -> torch.Tensor | None:
+    current_selection_summary = feature_tensors.get("currentSelectionSummary")
+    entity_features = feature_tensors.get("entityFeatures")
+    entity_mask = feature_tensors.get("entityMask")
+    entity_names = feature_tensors.get("entityNameTokens")
+    selection_indices = feature_tensors.get("currentSelectionIndices")
+    selection_mask = feature_tensors.get("currentSelectionMask")
+    selection_resolved_mask = feature_tensors.get("currentSelectionResolvedMask")
+
+    if (
+        current_selection_summary is None
+        or entity_features is None
+        or entity_mask is None
+        or entity_names is None
+        or selection_indices is None
+        or selection_mask is None
+    ):
+        return None
+
+    entity_feature_names = list(metadata["schema"]["observation"].get("entityFeatureNames", []))
+    index_by_name = {name: idx for idx, name in enumerate(entity_feature_names)}
+    required_names = [
+        "relation_self",
+        "object_aircraft",
+        "object_building",
+        "object_infantry",
+        "object_vehicle",
+        "can_move",
+        "has_wrench_repair",
+        "ammo",
+        "attack_state_check_range",
+        "attack_state_prepare_to_fire",
+        "attack_state_fire_up",
+        "attack_state_firing",
+        "attack_state_just_fired",
+    ]
+    if any(name not in index_by_name for name in required_names):
+        return None
+
+    primary_weapon_cooldown_idx = index_by_name.get("primary_weapon_cooldown_ticks")
+    secondary_weapon_cooldown_idx = index_by_name.get("secondary_weapon_cooldown_ticks")
+    shared_vocab = metadata["schema"].get("sharedNameVocabulary", {})
+
+    summary_rows: list[list[int]] = []
+    sample_count = int(current_selection_summary.shape[0])
+    max_entities = int(entity_features.shape[1])
+    max_selection = int(selection_mask.shape[1])
+
+    for sample_index in range(sample_count):
+        infantry_count = 0
+        vehicle_count = 0
+        aircraft_count = 0
+        building_count = 0
+        other_count = 0
+        can_move = False
+        can_attack = False
+        can_deploy = False
+        can_gather = False
+        can_repair = False
+
+        for selection_slot in range(max_selection):
+            if int(selection_mask[sample_index, selection_slot].item()) == 0:
+                continue
+            if selection_resolved_mask is not None and int(selection_resolved_mask[sample_index, selection_slot].item()) == 0:
+                continue
+            entity_index = int(selection_indices[sample_index, selection_slot].item())
+            if entity_index < 0 or entity_index >= max_entities:
+                continue
+            if int(entity_mask[sample_index, entity_index].item()) == 0:
+                continue
+
+            feature_row = entity_features[sample_index, entity_index]
+            if float(feature_row[index_by_name["relation_self"]].item()) <= 0.5:
+                continue
+
+            is_aircraft = float(feature_row[index_by_name["object_aircraft"]].item()) > 0.5
+            is_building = float(feature_row[index_by_name["object_building"]].item()) > 0.5
+            is_infantry = float(feature_row[index_by_name["object_infantry"]].item()) > 0.5
+            is_vehicle = float(feature_row[index_by_name["object_vehicle"]].item()) > 0.5
+            if is_infantry:
+                infantry_count += 1
+            elif is_vehicle:
+                vehicle_count += 1
+            elif is_aircraft:
+                aircraft_count += 1
+            elif is_building:
+                building_count += 1
+            else:
+                other_count += 1
+
+            can_move = can_move or (float(feature_row[index_by_name["can_move"]].item()) > 0.5)
+            has_attack_signal = any(
+                float(feature_row[index_by_name[name]].item()) > 0.5
+                for name in [
+                    "attack_state_check_range",
+                    "attack_state_prepare_to_fire",
+                    "attack_state_fire_up",
+                    "attack_state_firing",
+                    "attack_state_just_fired",
+                ]
+            ) or any(
+                float(feature_row[idx].item()) > 0.0
+                for idx in [
+                    index_by_name["ammo"],
+                    primary_weapon_cooldown_idx,
+                    secondary_weapon_cooldown_idx,
+                ]
+                if idx is not None
+            )
+            can_attack = can_attack or has_attack_signal
+            can_repair = can_repair or (float(feature_row[index_by_name["has_wrench_repair"]].item()) > 0.5)
+
+            entity_name = _decode_name_token(shared_vocab, int(entity_names[sample_index, entity_index].item()))
+            can_deploy = can_deploy or bool(entity_name and entity_name in DEPLOYABLE_NAMES)
+            can_gather = can_gather or bool(entity_name and entity_name in HARVESTER_NAMES)
+
+        mixed_type = sum(
+            int(count > 0)
+            for count in [infantry_count, vehicle_count, aircraft_count, building_count, other_count]
+        ) > 1
+        summary_rows.append(
+            [
+                infantry_count,
+                vehicle_count,
+                aircraft_count,
+                building_count,
+                int(can_move),
+                int(can_attack),
+                int(can_deploy),
+                int(can_gather),
+                int(can_repair),
+                int(mixed_type),
+            ]
+        )
+
+    return torch.tensor(summary_rows, dtype=current_selection_summary.dtype)
+
+
 def audit_feature_shard(
     *,
     result: dict[str, Any],
@@ -316,7 +474,62 @@ def audit_feature_shard(
 
     available_action_mask = feature_tensors.get("availableActionMask")
     action_type_ids = label_tensors.get("actionTypeId")
+    current_selection_summary_tensor = feature_tensors.get("currentSelectionSummary")
     available_action_summary: dict[str, Any] = {}
+    current_selection_summary: dict[str, Any] = {}
+    if current_selection_summary_tensor is not None:
+        if int(torch.sum(current_selection_summary_tensor < 0).item()):
+            issue(issues, issue_type="negative_current_selection_summary_value", shard=shard_name)
+        summary_meta = metadata["featureLayoutV1"].get("currentSelection", {}).get("summary", {})
+        feature_names = list(summary_meta.get("featureNames", CURRENT_SELECTION_SUMMARY_FEATURE_NAMES))
+        flag_names = {
+            "selected_can_move",
+            "selected_can_attack",
+            "selected_can_deploy",
+            "selected_can_gather",
+            "selected_can_repair",
+            "selected_mixed_type",
+        }
+        for feature_index, feature_name in enumerate(feature_names):
+            column = current_selection_summary_tensor[:, feature_index]
+            if feature_name in flag_names:
+                append_non_binary_issue(
+                    tensor=column,
+                    issues=issues,
+                    shard_name=shard_name,
+                    section_name=f"currentSelectionSummary::{feature_name}",
+                    group_name="featureTensors",
+                )
+            if torch.count_nonzero(column):
+                aggregates["current_selection_summary_nonzero_features"].update(
+                    {feature_name: int(torch.count_nonzero(column).item())}
+                )
+
+        rebuilt_summary = _rebuild_current_selection_summary(feature_tensors=feature_tensors, metadata=metadata)
+        if rebuilt_summary is not None:
+            matches, mismatch_count = compare_float_tensors(
+                actual=current_selection_summary_tensor.to(dtype=torch.float32),
+                expected=rebuilt_summary.to(dtype=torch.float32),
+                atol=0.0,
+                rtol=0.0,
+            )
+            if not matches:
+                issue(
+                    issues,
+                    issue_type="current_selection_summary_mismatch",
+                    shard=shard_name,
+                    mismatchCount=mismatch_count,
+                )
+
+        current_selection_summary = {
+            "density": section_density["currentSelectionSummary"],
+            "topActiveFeatures": top_counter_entries(
+                aggregates["current_selection_summary_nonzero_features"],
+                key_name="name",
+                limit=top_k,
+            ),
+        }
+
     if available_action_mask is not None and action_type_ids is not None:
         append_non_binary_issue(
             tensor=available_action_mask,
@@ -611,6 +824,7 @@ def audit_feature_shard(
         "featureShape": list(feature_shape),
         "labelShape": list(label_shape),
         "issueCount": len(issues),
+        "currentSelectionSummary": current_selection_summary,
         "availableActionMask": available_action_summary,
         "ownedCompositionBow": owned_composition_summary,
         "buildOrderTrace": build_order_summary,
@@ -656,6 +870,13 @@ def main(argv: list[str]) -> int:
             "availableActionMask": {
                 "topEnabledActions": top_counter_entries(aggregate_counters["available_enabled_total"], key_name="actionTypeId", limit=args.top_k),
                 "topDisabledActions": top_counter_entries(aggregate_counters["available_disabled_total"], key_name="actionTypeId", limit=args.top_k),
+            },
+            "currentSelectionSummary": {
+                "topActiveFeatures": top_counter_entries(
+                    aggregate_counters["current_selection_summary_nonzero_features"],
+                    key_name="name",
+                    limit=args.top_k,
+                ),
             },
             "ownedCompositionBow": {
                 "topOccupiedSlots": top_counter_entries(aggregate_counters["owned_composition_totals"], key_name="vocabId", limit=args.top_k),

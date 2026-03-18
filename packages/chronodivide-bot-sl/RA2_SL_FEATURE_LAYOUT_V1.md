@@ -129,6 +129,22 @@ Add compact derived selection-summary scalars:
 - selected can-repair flag
 - selected mixed-type flag
 
+Current V1 policy:
+
+- store these in a dedicated `currentSelectionSummary` section
+- derive them only from the currently resolved self selection in the visible entity tensor
+- category counts come from the entity object-type one-hot flags
+- `selected_can_move` comes from `can_move`
+- `selected_can_attack` uses a conservative visible-signal heuristic:
+  - attack-state activity
+  - ammo
+  - weapon cooldown signals
+- `selected_can_deploy` uses known deployable names
+- `selected_can_gather` uses known harvester names
+- `selected_can_repair` uses the visible `has_wrench_repair` signal
+- `selected_mixed_type` is true when more than one broad selected category is present
+- because this uses only resolved selected entities, it can undercount when part of the selection could not be resolved into the current entity tensor
+
 Why:
 
 - raw selection tensors are useful
@@ -161,10 +177,10 @@ Current V1 note:
 
 - use direct observation-safe support state where available, not an omniscient legality solver
 - for RA2 this currently means:
-  - order actions are disabled confidently only when there is definitely no current selection
+  - order actions are disabled confidently only when there are no plausible self-controlled entities to issue them
   - queue / placement actions may use current player production summaries as a conservative capability signal
   - super-weapon actions may use the per-sample player super-weapon list directly
-- if selected-unit identity is ambiguous, uncertain order actions stay enabled rather than producing false negatives
+- if selection or queue identity is ambiguous, uncertain actions stay enabled rather than producing false negatives
 
 Why:
 
