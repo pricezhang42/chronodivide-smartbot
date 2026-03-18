@@ -177,6 +177,17 @@ Assumptions:
   - dtype: `int32`
   - meaning: `1` when the selected unit resolved into the current entity tensor, `0` otherwise
 
+### EOF note for selected units
+
+V1 canonical storage does not include an explicit end-of-selection (`EOF`) token.
+
+Hard V1 policy:
+
+- canonical storage uses `unitsIndices + unitsMask + unitsResolvedMask`
+- the end of the selected-unit list is represented by mask length, not by a stored stop token
+- if a future AlphaStar-style autoregressive selected-units head is added, its training target may derive an `EOF` token from `unitsMask`
+- that `EOF` should be a derived training representation, not a new canonical V1 label field
+
 - `targetEntityIndex`
   - shape: `[1]`
   - dtype: `int32`
