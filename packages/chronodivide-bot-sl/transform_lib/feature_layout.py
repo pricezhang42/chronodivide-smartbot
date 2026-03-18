@@ -669,7 +669,7 @@ def _is_order_action_available(
     has_selected_mobile: bool,
     has_selected_harvester: bool,
     has_selected_deployable: bool,
-    visible_resource_total: float,
+    selection_identity_unknown: bool,
 ) -> int:
     if not has_selection:
         return 0
@@ -688,17 +688,14 @@ def _is_order_action_available(
         "EnterTransport",
         "PlaceBomb",
     }
-    if order_type_name in movement_like_orders and not has_selected_mobile:
+    if order_type_name in movement_like_orders and not selection_identity_unknown and not has_selected_mobile:
         return 0
 
-    if order_type_name in {"Deploy", "DeploySelected"} and not has_selected_deployable:
+    if order_type_name in {"Deploy", "DeploySelected"} and not selection_identity_unknown and not has_selected_deployable:
         return 0
 
-    if order_type_name == "Gather":
-        if not has_selected_harvester:
-            return 0
-        if target_mode_name == "ore_tile" and visible_resource_total <= 0:
-            return 0
+    if order_type_name == "Gather" and not selection_identity_unknown and not has_selected_harvester:
+        return 0
 
     return 1
 
@@ -706,18 +703,45 @@ def _is_order_action_available(
 def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any]) -> list[int]:
     schema = dataset["schema"]
     scalar = sample["featureTensors"]["scalar"]
+    player_production = sample.get("playerProduction") or {}
+    player_super_weapons = sample.get("playerSuperWeapons") or []
     current_selection_count = int(sample["featureTensors"]["currentSelectionCount"][0])
+    current_selection_resolved_count = int(sample["featureTensors"].get("currentSelectionResolvedCount", [0])[0])
     self_unit_count = float(scalar[_scalar_name_index(schema, "self_unit_count")])
     self_building_count = float(scalar[_scalar_name_index(schema, "self_building_count")])
+    entity_mask = sample["featureTensors"]["entityMask"]
+    available_counts_by_name = {
+        str(entry.get("queueTypeName")): _safe_float(entry.get("count"), 0.0)
+        for entry in player_production.get("availableCountsByQueueType", [])
+        if isinstance(entry, dict) and entry.get("queueTypeName") is not None
+    }
+    factory_counts_by_name = {
+        str(entry.get("queueTypeName")): _safe_float(entry.get("count"), 0.0)
+        for entry in player_production.get("factoryCounts", [])
+        if isinstance(entry, dict) and entry.get("queueTypeName") is not None
+    }
+    has_build_sidebar = any(value > 0.0 for value in available_counts_by_name.values()) or any(
+        value > 0.0 for value in factory_counts_by_name.values()
+    )
+    known_super_weapon_types = {
+        str(entry.get("typeName"))
+        for entry in player_super_weapons
+        if isinstance(entry, dict) and isinstance(entry.get("typeName"), str)
+    }
 
     self_entities = _collect_self_entities(sample, dataset)
     selected_entities = _collect_selected_entities(sample, self_entities)
     self_entity_names = {entity["name"] for entity in self_entities if entity["name"]}
     selected_names = {entity["name"] for entity in selected_entities if entity["name"]}
 
-    has_self_entities = (self_unit_count + self_building_count) > 0
-    has_self_buildings = self_building_count > 0 or any(entity["isBuilding"] for entity in self_entities)
+    has_self_entities = (self_unit_count + self_building_count) > 0 or current_selection_count > 0 or any(
+        int(active) != 0 for active in entity_mask
+    )
+    has_self_buildings = self_building_count > 0 or any(entity["isBuilding"] for entity in self_entities) or has_build_sidebar
     has_selection = current_selection_count > 0
+    selection_identity_unknown = has_selection and (
+        current_selection_resolved_count != len(selected_entities) or not selected_entities
+    )
     has_selected_mobile = any(entity["canMove"] for entity in selected_entities)
     has_selected_harvester = bool(selected_names & HARVESTER_NAMES)
     has_selected_deployable = bool(selected_names & DEPLOYABLE_NAMES)
@@ -725,12 +749,7 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
         name in CONSTRUCTION_YARD_NAMES or name.endswith("CNST")
         for name in self_entity_names
     )
-    has_any_superweapon_structure = bool(self_entity_names & SUPERWEAPON_STRUCTURE_NAMES)
-    visible_resource_total = _sum_spatial_channel(sample, schema, "visible_ore") + _sum_spatial_channel(
-        sample,
-        schema,
-        "visible_gems",
-    )
+    has_any_superweapon_structure = bool(self_entity_names & SUPERWEAPON_STRUCTURE_NAMES) or bool(known_super_weapon_types)
 
     mask = [1] * len(ACTION_TYPE_ID_TO_NAME)
     for action_type_id, action_type_name in ACTION_TYPE_ID_TO_NAME.items():
@@ -755,19 +774,27 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
                 has_selected_mobile=has_selected_mobile,
                 has_selected_harvester=has_selected_harvester,
                 has_selected_deployable=has_selected_deployable,
-                visible_resource_total=visible_resource_total,
+                selection_identity_unknown=selection_identity_unknown,
             )
         elif action_type_name.startswith("Queue::"):
-            enabled = 1 if has_self_buildings else 0
+            enabled = 1 if has_build_sidebar or has_self_buildings else 0
         elif action_type_name.startswith("PlaceBuilding::"):
-            enabled = 1 if has_construction_yard else 0
+            enabled = 1 if (has_construction_yard or has_build_sidebar) else 0
         elif action_type_name.startswith("ActivateSuperWeapon::"):
             superweapon_name = action_type_name.split("::", 1)[1]
-            required_buildings = SUPERWEAPON_BUILDING_REQUIREMENTS.get(superweapon_name)
-            if required_buildings is not None:
-                enabled = 1 if (self_entity_names & required_buildings) else 0
+            if known_super_weapon_types:
+                if superweapon_name in known_super_weapon_types:
+                    enabled = 1
+                elif superweapon_name == "<unk_super_weapon>":
+                    enabled = 1
+                else:
+                    enabled = 0
             else:
-                enabled = 1 if has_any_superweapon_structure else 0
+                required_buildings = SUPERWEAPON_BUILDING_REQUIREMENTS.get(superweapon_name)
+                if required_buildings is not None:
+                    enabled = 1 if (self_entity_names & required_buildings) else 0
+                else:
+                    enabled = 1 if has_any_superweapon_structure else 0
 
         mask[action_type_id] = int(enabled)
 
@@ -1061,12 +1088,12 @@ def augment_dataset_with_available_action_mask(dataset: dict[str, Any]) -> None:
         }
     )
     feature_layout_v1["availableActionMask"] = {
-        "version": "v0_conservative",
+        "version": "v1_conservative_observation_driven",
         "shape": [len(ACTION_TYPE_ID_TO_NAME)],
         "policy": "observation_driven_conservative",
         "notes": [
             "This first pass disables only clearly impossible actions and leaves ambiguous ones enabled.",
-            "The mask is derived in chronodivide-bot-sl from current selection, visible self state, and static action-type semantics.",
+            "The mask is derived in chronodivide-bot-sl from current selection, current player production summaries, current player super-weapon state, and static action-type semantics.",
             "It intentionally avoids hidden enemy state and any omniscient legality solver.",
         ],
     }

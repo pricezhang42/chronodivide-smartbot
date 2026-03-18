@@ -157,6 +157,15 @@ Suggested decomposition:
 - placement action availability
 - super-weapon availability
 
+Current V1 note:
+
+- use direct observation-safe support state where available, not an omniscient legality solver
+- for RA2 this currently means:
+  - order actions are disabled confidently only when there is definitely no current selection
+  - queue / placement actions may use current player production summaries as a conservative capability signal
+  - super-weapon actions may use the per-sample player super-weapon list directly
+- if selected-unit identity is ambiguous, uncertain order actions stay enabled rather than producing false negatives
+
 Why:
 
 - this is the clearest RA2 analogue to mAS `available_actions`

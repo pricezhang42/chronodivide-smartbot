@@ -115,11 +115,14 @@ It does not include:
   - no omniscient legality solver for `availableActionMask`
   - memory features may only depend on information seen so far
 
-- `[ ]` Make `availableActionMask` observation-driven, similar in spirit to `pysc2.available_actions`.
+- `[x]` Make `availableActionMask` observation-driven, similar in spirit to `pysc2.available_actions`.
   Hard policy:
   - impossible actions should be masked out confidently
   - uncertain actions may remain enabled
   - mask generation must not depend on hidden enemy state
+  Current state:
+  - the mask is now built from current selection presence, current player production summaries, direct per-sample super-weapon state, and static action semantics
+  - chosen actions on the latest smoke validation are no longer disabled by the mask
 
 - `[ ]` Write the memory policy for enemy features.
   Hard policy:
@@ -170,12 +173,11 @@ It does not include:
   - per-action disable frequency
   - top action types that are almost always disabled or always enabled
 
-- `[~]` Validate on representative replays that actually observed action types are almost always enabled at the action step.
+- `[x]` Validate on representative replays that actually observed action types are almost always enabled at the action step.
   Current state:
-  - the new `audit_feature_tensors.py` checks chosen-action compatibility against `availableActionMask`
-  - on `entity_intent_smoke_20260318`, the audit found many chosen actions still disabled by the current conservative mask
-  - current misses include `Order::DeploySelected::*`, `Queue::Add::*`, and `PlaceBuilding::*`
-  - this means the current first-pass mask is implemented and audit-covered, but not yet correct enough to call done
+  - `audit_feature_tensors.py` checks chosen-action compatibility against `availableActionMask`
+  - after fixing deploy / queue-add / place-building gating, the smoke validation run at `available_action_fix_smoke2_20260318` reported `chosenActionDisabledCount = 0` for both saved shards
+  - the mask remains intentionally conservative: when selection identity is ambiguous, uncertain order actions stay enabled instead of producing false negatives
 
 ## Phase 6: Priority 0 - `ownedCompositionBow`
 
