@@ -10,8 +10,8 @@ Related design note:
 
 - `[x]` Model-build plan written
 - `[x]` Section-aware model dataset implemented
-- `[ ]` Baseline RA2 SL model implemented
-- `[ ]` Masked SL losses implemented
+- `[x]` Baseline RA2 SL model implemented
+- `[x]` Masked SL losses implemented
 - `[ ]` Trainer implemented
 - `[ ]` Tiny-slice overfit check passed
 - `[ ]` Pinch Point Soviet-slice training run passed
@@ -25,6 +25,7 @@ Related design note:
   - single-step supervised model
   - no recurrent core in the first version
   - no AlphaStar-style autoregressive selected-units head in the first version
+  - no teacher-forced autoregressive decoding in the first version
 - `[ ]` Freeze the initial training slice:
   - map = `2_pinch_point_le.map`
   - winner side/country filtering policy
@@ -89,78 +90,85 @@ Related design note:
   - `targetLocation`
   - `targetLocation2`
   - `quantity`
+- `[ ]` Freeze the V1 training-policy distinction:
+  - baseline training is non-autoregressive
+  - later teacher-forced decoding is a planned upgrade
+  - later free-running evaluation is a planned upgrade
 
 ## Phase 3: Baseline Encoders
 
 ### Scalar Encoder
 
-- `[ ]` Add `model_lib/encoders.py`.
-- `[ ]` Implement a scalar-block encoder for dense 1D feature sections.
-- `[ ]` Implement `buildOrderTrace` embedding:
+- `[x]` Add `model_lib/encoders.py`.
+- `[x]` Implement a scalar-block encoder for dense 1D feature sections.
+- `[x]` Implement `buildOrderTrace` embedding:
   - embedding table over static `actionTypeId`
   - pooling or small transformer
-- `[ ]` Concatenate scalar-section embeddings and project to one scalar latent.
-- `[ ]` Verify scalar encoder output shape and NaN safety.
+- `[x]` Concatenate scalar-section embeddings and project to one scalar latent.
+- `[x]` Verify scalar encoder output shape and NaN safety.
 
 ### Entity Encoder
 
-- `[ ]` Implement a masked entity encoder.
-- `[ ]` Start with:
+- `[x]` Implement a masked entity encoder.
+- `[x]` Start with:
   - linear projection per entity row
   - 1-2 transformer/self-attention layers or a simpler masked MLP baseline
-- `[ ]` Return:
+- `[x]` Return:
   - per-entity embeddings
   - pooled entity summary
-- `[ ]` Verify entity masks are respected.
+- `[x]` Verify entity masks are respected.
 
 ### Spatial Encoder
 
-- `[ ]` Implement a CNN spatial encoder for:
+- `[x]` Implement a CNN spatial encoder for:
   - `spatial`
   - `minimap`
   - `mapStatic`
-- `[ ]` Return:
+- `[x]` Return:
   - pooled spatial summary
   - shared spatial feature map for location heads
-- `[ ]` Verify shape consistency with saved spatial sizes.
+- `[x]` Verify shape consistency with saved spatial sizes.
 
 ## Phase 4: Fusion Torso
 
-- `[ ]` Add `model_lib/model.py`.
-- `[ ]` Fuse:
+- `[x]` Add `model_lib/model.py`.
+- `[x]` Fuse:
   - scalar latent
   - pooled entity latent
   - pooled spatial latent
-- `[ ]` Implement a simple shared torso MLP.
-- `[ ]` Keep the fusion model non-recurrent for V1.
-- `[ ]` Verify end-to-end forward pass on one batch.
+- `[x]` Implement a simple shared torso MLP.
+- `[x]` Keep the fusion model non-recurrent for V1.
+- `[x]` Verify end-to-end forward pass on one batch.
 
 ## Phase 5: Output Heads
 
-- `[ ]` Add `model_lib/heads.py`.
-- `[ ]` Implement `actionTypeHead`.
-- `[ ]` Implement `delayHead`.
-- `[ ]` Implement `queueHead`.
-- `[ ]` Implement `unitsHead`.
-- `[ ]` Implement `targetEntityHead`.
-- `[ ]` Implement `targetLocationHead`.
-- `[ ]` Implement `targetLocation2Head`.
-- `[ ]` Implement `quantityHead`.
+- `[x]` Add `model_lib/heads.py`.
+- `[x]` Implement `actionTypeHead`.
+- `[x]` Implement `delayHead`.
+- `[x]` Implement `queueHead`.
+- `[x]` Implement `unitsHead`.
+- `[x]` Implement `targetEntityHead`.
+- `[x]` Implement `targetLocationHead`.
+- `[x]` Implement `targetLocation2Head`.
+- `[x]` Implement `quantityHead`.
 
 ### Head Policy
 
-- `[ ]` `actionTypeHead` uses the static RA2 action dict size.
-- `[ ]` `actionTypeHead` supports availability masking from `availableActionMask`.
-- `[ ]` `unitsHead` V1 is slot-wise masked classification, not autoregressive EOF decoding.
-- `[ ]` `targetLocation` heads produce `32 x 32` logits aligned with saved training targets.
-- `[ ]` Decide and document `quantityHead` type:
+- `[x]` `actionTypeHead` uses the static RA2 action dict size.
+- `[x]` `actionTypeHead` supports availability masking from `availableActionMask`.
+- `[x]` `unitsHead` V1 is slot-wise masked classification, not autoregressive EOF decoding.
+- `[x]` `targetLocation` heads produce `32 x 32` logits aligned with saved training targets.
+- `[x]` Decide whether V1 heads are:
+  - pure shared-latent heads
+  - or partially conditioned on predicted/teacher-forced earlier arguments
+- `[x]` Decide and document `quantityHead` type:
   - raw regression
   - or small-support classification
 
 ## Phase 6: Losses And Metrics
 
-- `[ ]` Add `model_lib/losses.py`.
-- `[ ]` Implement masked cross-entropy for:
+- `[x]` Add `model_lib/losses.py`.
+- `[x]` Implement masked cross-entropy for:
   - `actionType`
   - `delay`
   - `queue`
@@ -168,9 +176,13 @@ Related design note:
   - `targetEntity`
   - `targetLocation`
   - `targetLocation2`
-- `[ ]` Implement masked loss for `quantity`.
-- `[ ]` Use saved loss masks directly from `.training.pt`.
-- `[ ]` Add per-head metrics:
+- `[x]` Implement masked loss for `quantity`.
+- `[x]` Use saved loss masks directly from `.training.pt`.
+- `[x]` Apply `availableActionMask` as an action-type logit mask in loss/inference code.
+- `[ ]` Decide and document action-type loss weighting policy:
+  - uniform
+  - or mAS-style category-aware weighting
+- `[x]` Add per-head metrics:
   - action accuracy
   - delay accuracy
   - queue accuracy
@@ -178,7 +190,8 @@ Related design note:
   - target entity accuracy
   - target location accuracy
   - quantity accuracy
-- `[ ]` Verify zero-loss-mask rows do not contribute to loss.
+- `[x]` Verify zero-loss-mask rows do not contribute to loss.
+- `[ ]` Add a separate free-running metrics path after the training-loss pass.
 
 ## Phase 7: Training Script
 
@@ -194,6 +207,10 @@ Related design note:
 - `[ ]` Add optimizer and scheduler setup.
 - `[ ]` Add checkpoint save/load.
 - `[ ]` Add train/val loops.
+- `[ ]` Keep the training loop structured so it can later support:
+  - teacher-forced training forward pass
+  - free-running metrics forward pass
+  - sequence-window batches
 - `[ ]` Add logging for:
   - total loss
   - per-head loss
@@ -202,13 +219,15 @@ Related design note:
 
 ## Phase 8: Tiny-Slice Debugging
 
-- `[ ]` Run one-batch forward pass successfully.
-- `[ ]` Run one-batch backward pass successfully.
+- `[x]` Run one-batch forward pass successfully.
+- `[x]` Run one-batch backward pass successfully.
 - `[ ]` Overfit on one tiny shard or a very small replay subset.
 - `[ ]` Confirm training loss decreases sharply.
 - `[ ]` Confirm `actionType` head can memorize a tiny subset.
 - `[ ]` Confirm location heads learn non-trivial targets on a tiny subset.
 - `[ ]` Confirm masked heads do not produce unstable NaNs.
+- `[ ]` Confirm action-type masking does not suppress chosen gold actions.
+- `[ ]` Confirm free-running metrics can be computed without teacher forcing once enabled.
 
 ## Phase 9: Pinch Point Soviet Slice
 
@@ -241,6 +260,9 @@ Related design note:
 
 - `[ ]` Add sequence batching if the baseline is stable.
 - `[ ]` Add an optional recurrent or transformer core.
+- `[ ]` Add replay-window dataset items with `[B, S, ...]` batch support.
+- `[ ]` Add a `mimic_forward`-style teacher-forced training path.
+- `[ ]` Add a separate free-running evaluation forward pass.
 - `[ ]` Add a derived EOF-based autoregressive `units` head.
 - `[ ]` Add stronger autoregressive coupling between heads.
 - `[ ]` Re-evaluate whether the extra complexity improves validation.
@@ -253,7 +275,7 @@ Related design note:
 
 ## Recommended Immediate Next Step
 
-- `[ ]` Implement Phase 1:
-  - `model_lib/dataset.py`
-  - `model_lib/batch.py`
-  - tensor inspection script
+- `[ ]` Implement Phase 5 and Phase 6:
+  - `model_lib/heads.py`
+  - `model_lib/losses.py`
+  - one-batch backward smoke test

@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+import torch
+import torch.nn.functional as F
+
+
+def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    mask_float = mask.to(values.dtype)
+    denom = torch.clamp(mask_float.sum(), min=1.0)
+    return (values * mask_float).sum() / denom
+
+
+def _one_hot_to_index(one_hot: torch.Tensor) -> torch.Tensor:
+    return torch.argmax(one_hot.to(torch.float32), dim=-1)
+
+
+def _masked_classification_loss(logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    loss = F.cross_entropy(logits, targets, reduction="none")
+    return _masked_mean(loss, mask)
+
+
+def _masked_accuracy(logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    predictions = torch.argmax(logits, dim=-1)
+    correct = (predictions == targets).to(torch.float32)
+    return _masked_mean(correct, mask)
+
+
+def _masked_spatial_loss(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    flat_logits = logits.reshape(logits.shape[0], -1)
+    flat_targets = _one_hot_to_index(target_one_hot.reshape(target_one_hot.shape[0], -1))
+    return _masked_classification_loss(flat_logits, flat_targets, mask)
+
+
+def _masked_spatial_accuracy(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    flat_logits = logits.reshape(logits.shape[0], -1)
+    flat_targets = _one_hot_to_index(target_one_hot.reshape(target_one_hot.shape[0], -1))
+    return _masked_accuracy(flat_logits, flat_targets, mask)
+
+
+def _masked_quantity_loss(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    value_loss = F.smooth_l1_loss(pred.squeeze(-1), target.to(torch.float32).squeeze(-1), reduction="none")
+    return _masked_mean(value_loss, mask)
+
+
+def _masked_quantity_accuracy(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    rounded_pred = torch.round(pred.squeeze(-1))
+    correct = (rounded_pred == target.to(torch.float32).squeeze(-1)).to(torch.float32)
+    return _masked_mean(correct, mask)
+
+
+@dataclass
+class RA2SLLossOutput:
+    total_loss: torch.Tensor
+    loss_by_head: dict[str, torch.Tensor]
+    metrics: dict[str, torch.Tensor]
+
+
+def compute_ra2_sl_loss(
+    outputs: dict[str, torch.Tensor],
+    batch: dict[str, Any],
+) -> RA2SLLossOutput:
+    targets = batch["training_targets"]
+    masks = batch["training_masks"]
+
+    action_type_targets = _one_hot_to_index(targets["actionTypeOneHot"])
+    delay_targets = _one_hot_to_index(targets["delayOneHot"])
+    queue_targets = _one_hot_to_index(targets["queueOneHot"])
+    units_targets = _one_hot_to_index(targets["unitsOneHot"])
+    target_entity_targets = _one_hot_to_index(targets["targetEntityOneHot"])
+
+    action_type_mask = masks["actionTypeLossMask"].squeeze(-1) > 0
+    delay_mask = masks["delayLossMask"].squeeze(-1) > 0
+    queue_mask = masks["queueLossMask"].squeeze(-1) > 0
+    units_mask = masks["unitsLossMask"] > 0
+    target_entity_mask = masks["targetEntityLossMask"].squeeze(-1) > 0
+    target_location_mask = masks["targetLocationLossMask"].squeeze(-1) > 0
+    target_location2_mask = masks["targetLocation2LossMask"].squeeze(-1) > 0
+    quantity_mask = masks["quantityLossMask"].squeeze(-1) > 0
+
+    action_type_loss = _masked_classification_loss(outputs["actionTypeLogits"], action_type_targets, action_type_mask)
+    delay_loss = _masked_classification_loss(outputs["delayLogits"], delay_targets, delay_mask)
+    queue_loss = _masked_classification_loss(outputs["queueLogits"], queue_targets, queue_mask)
+
+    units_logits = outputs["unitsLogits"].reshape(-1, outputs["unitsLogits"].shape[-1])
+    units_target_flat = units_targets.reshape(-1)
+    units_mask_flat = units_mask.reshape(-1)
+    units_loss = _masked_classification_loss(units_logits, units_target_flat, units_mask_flat)
+
+    target_entity_loss = _masked_classification_loss(
+        outputs["targetEntityLogits"],
+        target_entity_targets,
+        target_entity_mask,
+    )
+    target_location_loss = _masked_spatial_loss(
+        outputs["targetLocationLogits"],
+        targets["targetLocationOneHot"],
+        target_location_mask,
+    )
+    target_location2_loss = _masked_spatial_loss(
+        outputs["targetLocation2Logits"],
+        targets["targetLocation2OneHot"],
+        target_location2_mask,
+    )
+    quantity_loss = _masked_quantity_loss(outputs["quantityPred"], targets["quantityValue"], quantity_mask)
+
+    loss_by_head = {
+        "actionType": action_type_loss,
+        "delay": delay_loss,
+        "queue": queue_loss,
+        "units": units_loss,
+        "targetEntity": target_entity_loss,
+        "targetLocation": target_location_loss,
+        "targetLocation2": target_location2_loss,
+        "quantity": quantity_loss,
+    }
+    total_loss = sum(loss_by_head.values())
+
+    metrics = {
+        "actionTypeAccuracy": _masked_accuracy(outputs["actionTypeLogits"], action_type_targets, action_type_mask),
+        "delayAccuracy": _masked_accuracy(outputs["delayLogits"], delay_targets, delay_mask),
+        "queueAccuracy": _masked_accuracy(outputs["queueLogits"], queue_targets, queue_mask),
+        "unitsAccuracy": _masked_accuracy(units_logits, units_target_flat, units_mask_flat),
+        "targetEntityAccuracy": _masked_accuracy(
+            outputs["targetEntityLogits"],
+            target_entity_targets,
+            target_entity_mask,
+        ),
+        "targetLocationAccuracy": _masked_spatial_accuracy(
+            outputs["targetLocationLogits"],
+            targets["targetLocationOneHot"],
+            target_location_mask,
+        ),
+        "targetLocation2Accuracy": _masked_spatial_accuracy(
+            outputs["targetLocation2Logits"],
+            targets["targetLocation2OneHot"],
+            target_location2_mask,
+        ),
+        "quantityAccuracy": _masked_quantity_accuracy(
+            outputs["quantityPred"],
+            targets["quantityValue"],
+            quantity_mask,
+        ),
+    }
+
+    return RA2SLLossOutput(
+        total_loss=total_loss,
+        loss_by_head=loss_by_head,
+        metrics=metrics,
+    )

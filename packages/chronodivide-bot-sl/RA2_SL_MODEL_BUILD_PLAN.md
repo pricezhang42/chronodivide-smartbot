@@ -43,6 +43,9 @@ Good things to reuse conceptually:
 - fused torso
 - multi-head action prediction
 - masked per-head loss
+- teacher-forced supervised decoding
+- separate free-running evaluation pass
+- action-type logit masking from observed availability
 - optional autoregressive argument heads
 
 Things not to copy blindly:
@@ -114,6 +117,14 @@ Rationale:
 - this is much easier to debug than a full sequence model
 
 This should be the default first implementation.
+
+Important training-policy note:
+
+- Stage 1 remains single-step and non-recurrent in the model core
+- but the training loop should already be designed so it can later support:
+  - teacher-forced decoding
+  - free-running metric passes
+  - sequence-window batching
 
 ### Stage 2: AlphaStar-Like Refinement
 
@@ -223,7 +234,8 @@ Recommended head design:
 
 - `actionTypeHead`
   - linear classifier over static RA2 action dict
-  - apply `availableActionMask` as logit mask during training and inference
+  - apply `availableActionMask` as a logit mask during training and inference
+  - keep the mask conservative and observation-driven, like mAS `available_actions`
 - `delayHead`
   - classifier over 128 bins
 - `queueHead`
@@ -239,7 +251,26 @@ Recommended head design:
   - same shape as targetLocation
 - `quantityHead`
   - V1 should predict raw integer value as regression or small-class classifier
-  - recommended first choice: small integer classification if the observed support is small
+  - current baseline choice: masked regression on the raw integer target
+  - later, move to small-support classification if the observed quantity support remains compact enough
+
+## Head Conditioning Strategy
+
+The mAS batch trace confirms that one of the most useful pieces to borrow later is not just “multiple heads”, but the fact that later heads can depend on earlier argument choices.
+
+Recommended RA2 policy:
+
+- V1 baseline:
+  - heads read from the shared fused latent
+  - entity and spatial heads also read from shared entity/spatial features
+  - do not require full autoregressive conditioning yet
+- V1.5 / later:
+  - add teacher-forced head conditioning
+  - action type conditions queue / units / target heads
+  - queue and selected units can condition later heads
+  - selected-units head can become autoregressive with derived EOF
+
+So the model path should be built so that an autoregressive embedding can be inserted later without a large rewrite.
 
 ## Loss Strategy
 
@@ -272,6 +303,49 @@ Use the saved training masks directly:
 - `quantityLossMask`
 
 This should be implemented in one RA2-native loss file, not by trying to route RA2 tensors through SC2 `Label.label2action`.
+
+## Training Protocol
+
+The mAS batch trace is especially useful here. The most important training-side ideas we should mirror are:
+
+- teacher-forced supervised decoding for the gradient-bearing pass
+- a separate free-running pass for metrics
+- masked per-head losses driven by semantic and resolution masks
+
+Recommended RA2 training protocol:
+
+### V1 baseline
+
+- one forward pass
+- no autoregressive teacher forcing yet
+- compute masked per-head losses directly from model outputs and saved targets
+
+### V1.5 / later
+
+- add a `mimic_forward`-style path for teacher-forced decoding
+- use GT earlier arguments when training later heads
+- run a second unguided pass for reported metrics
+
+This distinction matters because mAS does not report purely teacher-forced accuracy. It trains with teacher forcing and evaluates with a freerunning pass. That is a good pattern for RA2 as well.
+
+## Batch Strategy
+
+The mAS trace also highlights sequence-window batching:
+
+- replay -> flat rows
+- rows -> overlapping `[B, S, ...]` windows
+- flatten inside loss or sequence core
+
+Recommended RA2 policy:
+
+- V1 baseline:
+  - start with sample-wise batches from the current action-aligned rows
+- later:
+  - add replay-window datasets
+  - support `[B, S, ...]` sequence batches
+  - optionally add recurrent or transformer sequence cores
+
+For the first RA2 model, this is a deliberate simplification, not an oversight.
 
 ## Data Pipeline Plan
 
@@ -401,10 +475,13 @@ Borrow first:
 - scalar / entity / spatial encoder decomposition
 - separate head decomposition
 - masked supervised loss structure
+- action-type availability masking
 - train loop and checkpoint structure
 
 Borrow later:
 
+- teacher-forced multi-head decoding
+- free-running metrics pass
 - selected-units autoregressive logic
 - recurrent core
 - more AlphaStar-like conditioning between heads
@@ -417,20 +494,15 @@ Do not borrow directly:
 
 ## Recommended Immediate Next Coding Step
 
-Implement Phase A completely before starting the model itself.
+Phase A is complete. The next coding step after the current encoder/torso work is:
 
-That means:
-
-1. add `model_lib/dataset.py`
-2. add `model_lib/batch.py`
-3. add a small tensor-inspection script
-4. verify loading on the existing generated shards
-
-After that, start the baseline model with:
-
-- scalar MLP encoder
-- spatial CNN encoder
-- masked entity transformer encoder
-- multi-head outputs
+1. add `model_lib/heads.py`
+2. add `model_lib/losses.py`
+3. run one-batch backward smoke tests
+4. keep the implementation compatible with later:
+   - availability-masked action logits
+   - teacher-forced head conditioning
+   - free-running metric passes
+   - sequence-window batching
 
 This is the safest path to a working RA2 SL model without overcommitting to full AlphaStar complexity too early.
