@@ -12,9 +12,9 @@ Related design note:
 - `[x]` Section-aware model dataset implemented
 - `[x]` Baseline RA2 SL model implemented
 - `[x]` Masked SL losses implemented
-- `[ ]` Trainer implemented
-- `[ ]` Tiny-slice overfit check passed
-- `[ ]` Pinch Point Soviet-slice training run passed
+- `[x]` Trainer implemented
+- `[x]` Tiny-slice overfit check passed
+- `[x]` Pinch Point Soviet-slice training run passed
 
 ## Phase 0: Contracts And Scope
 
@@ -195,8 +195,8 @@ Related design note:
 
 ## Phase 7: Training Script
 
-- `[ ]` Add `train_sl_model.py`.
-- `[ ]` Implement config/CLI for:
+- `[x]` Add `train_sl_model.py`.
+- `[x]` Implement config/CLI for:
   - shard root
   - replay filtering
   - batch size
@@ -204,53 +204,54 @@ Related design note:
   - epochs
   - train/val split
   - checkpoint dir
-- `[ ]` Add optimizer and scheduler setup.
-- `[ ]` Add checkpoint save/load.
-- `[ ]` Add train/val loops.
-- `[ ]` Keep the training loop structured so it can later support:
+- `[x]` Add optimizer and scheduler setup.
+- `[x]` Add checkpoint save/load.
+- `[x]` Add train/val loops.
+- `[x]` Keep the training loop structured so it can later support:
   - teacher-forced training forward pass
   - free-running metrics forward pass
   - sequence-window batches
-- `[ ]` Add logging for:
+- `[x]` Add logging for:
   - total loss
   - per-head loss
   - per-head accuracy
   - examples/sec or samples/sec
+- `[x]` Validate a real training smoke run on the current Arab `Pinch Point LE` shard slice and save checkpoints plus run metadata.
 
 ## Phase 8: Tiny-Slice Debugging
 
 - `[x]` Run one-batch forward pass successfully.
 - `[x]` Run one-batch backward pass successfully.
-- `[ ]` Overfit on one tiny shard or a very small replay subset.
-- `[ ]` Confirm training loss decreases sharply.
-- `[ ]` Confirm `actionType` head can memorize a tiny subset.
-- `[ ]` Confirm location heads learn non-trivial targets on a tiny subset.
-- `[ ]` Confirm masked heads do not produce unstable NaNs.
-- `[ ]` Confirm action-type masking does not suppress chosen gold actions.
+- `[x]` Overfit on one tiny shard or a very small replay subset.
+- `[x]` Confirm training loss decreases sharply.
+- `[x]` Confirm `actionType` head can memorize a tiny subset.
+- `[x]` Confirm location heads learn non-trivial targets on a tiny subset.
+- `[x]` Confirm masked heads do not produce unstable NaNs.
+- `[x]` Confirm action-type masking does not suppress chosen gold actions.
 - `[ ]` Confirm free-running metrics can be computed without teacher forcing once enabled.
 
 ## Phase 9: Pinch Point Soviet Slice
 
-- `[ ]` Build a reproducible training manifest for `Pinch Point LE`.
-- `[ ]` Decide exact Soviet-country filter:
+- `[x]` Build a reproducible training manifest for `Pinch Point LE`.
+- `[x]` Decide exact Soviet-country filter:
   - all Soviet winners
   - or `Arabs` only
-- `[ ]` Train on the chosen slice.
-- `[ ]` Record:
+- `[x]` Train on the chosen slice.
+- `[x]` Record:
   - replay count
   - shard count
   - sample count
   - map count
   - country distribution
-- `[ ]` Run validation on held-out shards.
-- `[ ]` Save one model checkpoint and one training report.
+- `[x]` Run validation on held-out shards.
+- `[x]` Save one model checkpoint and one training report.
 
 ## Phase 10: Spot Checks
 
-- `[ ]` Add a small prediction-inspection script.
-- `[ ]` Print top-k `actionType` predictions for real samples.
-- `[ ]` Compare predicted vs gold `queue`, `targetEntity`, and `targetLocation`.
-- `[ ]` Spot-check:
+- `[x]` Add a small prediction-inspection script.
+- `[x]` Print top-k `actionType` predictions for real samples.
+- `[x]` Compare predicted vs gold `queue`, `targetEntity`, and `targetLocation`.
+- `[x]` Spot-check:
   - build-order samples
   - combat samples
   - queue-heavy samples
