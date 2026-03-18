@@ -29,7 +29,9 @@ Notes:
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -37,6 +39,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import torch
 from action_dict import STATIC_ACTION_DICT_VERSION
 from transform_lib.action_labels import (
@@ -84,6 +87,8 @@ from transform_lib.schema_utils import (
 )
 from transform_lib.training_targets import finalize_training_target_sidecars
 
+EXTRACT_CACHE_VERSION = "v2_binary"
+
 
 def node_player_arg(player: str) -> str | None:
     normalized = player.strip()
@@ -108,6 +113,8 @@ def build_node_command(config: TransformConfig, replay_path: Path, output_path: 
         str(config.spatial_size),
         "--minimap-size",
         str(config.minimap_size),
+        "--output-format",
+        "binary",
         "--output",
         str(output_path),
     ]
@@ -126,9 +133,148 @@ def build_node_command(config: TransformConfig, replay_path: Path, output_path: 
     return command
 
 
+def build_extract_cache_path(config: TransformConfig, replay_path: Path) -> Path | None:
+    if config.extract_cache_dir is None:
+        return None
+
+    extractor_dir = config.py_chronodivide_script.parent
+    extractor_signature = []
+    for source_path in sorted(extractor_dir.glob("*.mjs")):
+        stat = source_path.stat()
+        extractor_signature.append(
+            {
+                "path": str(source_path.resolve()),
+                "mtimeNs": stat.st_mtime_ns,
+                "size": stat.st_size,
+            }
+        )
+
+    replay_stat = replay_path.stat()
+    cache_key_payload = {
+        "version": EXTRACT_CACHE_VERSION,
+        "replayPath": str(replay_path.resolve()),
+        "replaySize": replay_stat.st_size,
+        "replayMtimeNs": replay_stat.st_mtime_ns,
+        "dataDir": str(config.data_dir.resolve()),
+        "player": node_player_arg(config.player),
+        "includeNoAction": config.include_no_action,
+        "includeUiActions": config.include_ui_actions,
+        "maxActions": config.max_actions,
+        "maxTick": config.max_tick,
+        "maxEntities": config.max_entities,
+        "maxSelectedUnits": config.max_selected_units,
+        "spatialSize": config.spatial_size,
+        "minimapSize": config.minimap_size,
+        "extractorSignature": extractor_signature,
+    }
+    cache_hash = hashlib.sha1(json.dumps(cache_key_payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+    return config.extract_cache_dir / f"{replay_path.stem}__{cache_hash}"
+
+
+def numpy_dtype_for_schema(dtype_name: str) -> np.dtype[Any]:
+    mapping = {
+        "float32": np.float32,
+        "float64": np.float64,
+        "int32": np.int32,
+        "int64": np.int64,
+    }
+    try:
+        return np.dtype(mapping[dtype_name])
+    except KeyError as exc:
+        raise ValueError(f"Unsupported binary section dtype: {dtype_name}") from exc
+
+
+def load_binary_section(
+    dataset_dir: Path,
+    sample_count: int,
+    section: dict[str, Any],
+    file_name: str,
+) -> np.ndarray[Any, Any]:
+    file_path = dataset_dir / file_name
+    dtype = numpy_dtype_for_schema(str(section["dtype"]))
+    shape = [int(dimension) for dimension in section["shape"]]
+    values_per_sample = int(np.prod(shape, dtype=np.int64)) if shape else 1
+    expected_value_count = sample_count * values_per_sample
+    section_array = np.fromfile(file_path, dtype=dtype)
+    if int(section_array.size) != expected_value_count:
+        raise ValueError(
+            f"Binary section {file_path} has {section_array.size} values, expected {expected_value_count}."
+        )
+    return section_array.reshape((sample_count, *shape))
+
+
+def load_binary_dataset(dataset_dir: Path) -> dict[str, Any]:
+    manifest_path = dataset_dir / "manifest.json"
+    support_path = dataset_dir / "support.json"
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    with support_path.open("r", encoding="utf-8") as handle:
+        support_payload = json.load(handle)
+
+    if manifest.get("format") != "sl_dataset_binary_v1":
+        raise ValueError(f"Unsupported extractor binary format in {manifest_path}.")
+
+    sample_count = int(manifest["sampleCount"])
+    support_samples = list(support_payload.get("samples", []))
+    if len(support_samples) != sample_count:
+        raise ValueError(
+            f"Support sample count mismatch for {dataset_dir}: {len(support_samples)} vs expected {sample_count}."
+        )
+
+    feature_sections = manifest["schema"]["featureSections"]
+    label_sections = manifest["schema"]["labelSections"]
+    feature_arrays = {
+        section["name"]: load_binary_section(
+            dataset_dir,
+            sample_count,
+            section,
+            manifest["featureSectionFiles"][section["name"]],
+        )
+        for section in feature_sections
+    }
+    label_arrays = {
+        section["name"]: load_binary_section(
+            dataset_dir,
+            sample_count,
+            section,
+            manifest["labelSectionFiles"][section["name"]],
+        )
+        for section in label_sections
+    }
+
+    samples: list[dict[str, Any]] = []
+    for sample_index, support_sample in enumerate(support_samples):
+        sample = dict(support_sample)
+        sample["featureTensors"] = {
+            section["name"]: feature_arrays[section["name"]][sample_index]
+            for section in feature_sections
+        }
+        sample["labelTensors"] = {
+            section["name"]: label_arrays[section["name"]][sample_index]
+            for section in label_sections
+        }
+        samples.append(sample)
+
+    return {
+        "replay": manifest["replay"],
+        "sampledPlayers": manifest["sampledPlayers"],
+        "options": manifest["options"],
+        "schema": manifest["schema"],
+        "superWeaponSchema": manifest["superWeaponSchema"],
+        "staticMapSchema": manifest["staticMapSchema"],
+        "staticMapByPlayer": manifest["staticMapByPlayer"],
+        "counts": manifest["counts"],
+        "samples": samples,
+    }
+
+
 def run_py_chronodivide_extract(config: TransformConfig, replay_path: Path) -> dict[str, Any]:
+    cache_path = build_extract_cache_path(config, replay_path)
+    if cache_path is not None and cache_path.exists() and not config.refresh_extract_cache:
+        return load_binary_dataset(cache_path)
+
     with tempfile.TemporaryDirectory(prefix="chronodivide_sl_") as temp_dir:
-        temp_output = Path(temp_dir) / "dataset.json"
+        temp_output = Path(temp_dir) / "dataset"
         command = build_node_command(config, replay_path, temp_output)
         completed = subprocess.run(
             command,
@@ -150,8 +296,14 @@ def run_py_chronodivide_extract(config: TransformConfig, replay_path: Path) -> d
             )
         if not temp_output.exists():
             raise RuntimeError(f"Expected extractor output file was not created: {temp_output}")
-        with temp_output.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
+        result_path = temp_output
+        if cache_path is not None:
+            if cache_path.exists():
+                shutil.rmtree(cache_path)
+            cache_path.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(temp_output, cache_path, dirs_exist_ok=True)
+            result_path = cache_path
+        return load_binary_dataset(result_path)
 
 
 def group_samples_by_player(samples: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -340,10 +492,12 @@ def write_manifest(
     config_dict["output_dir"] = str(config.output_dir)
     config_dict["data_dir"] = str(config.data_dir)
     config_dict["py_chronodivide_script"] = str(config.py_chronodivide_script)
+    config_dict["extract_cache_dir"] = str(config.extract_cache_dir) if config.extract_cache_dir is not None else None
 
     manifest = {
         "createdAt": utc_now_iso(),
         "config": config_dict,
+        "extractCacheVersion": EXTRACT_CACHE_VERSION,
         "replayCount": len(replay_paths),
         "savedShardCount": sum(1 for result in results if result["status"] == "saved"),
         "skippedShardCount": sum(1 for result in results if result["status"] == "skipped"),

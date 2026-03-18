@@ -117,6 +117,8 @@ class TransformConfig:
     output_dir: Path
     data_dir: Path
     py_chronodivide_script: Path
+    extract_cache_dir: Path | None
+    refresh_extract_cache: bool
     replay_glob: str
     replay_start: int
     max_replays: int | None
@@ -152,6 +154,9 @@ def parse_args(argv: list[str]) -> TransformConfig:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--data-dir", type=Path, default=DEFAULT_DATA_DIR)
     parser.add_argument("--py-chronodivide-script", type=Path, default=DEFAULT_PY_CHRONODIVIDE_SCRIPT)
+    parser.add_argument("--extract-cache-dir", type=Path, default=None)
+    parser.add_argument("--no-extract-cache", action="store_true")
+    parser.add_argument("--refresh-extract-cache", action="store_true")
     parser.add_argument("--replay-glob", default="*.rpl")
     parser.add_argument("--replay-start", type=int, default=0)
     parser.add_argument("--max-replays", type=int, default=None)
@@ -179,11 +184,21 @@ def parse_args(argv: list[str]) -> TransformConfig:
     parser.add_argument("--fail-fast", action="store_true")
 
     args = parser.parse_args(argv)
+    resolved_output_dir = args.output_dir.resolve()
+    extract_cache_dir = None
+    if not args.no_extract_cache:
+        extract_cache_dir = (
+            args.extract_cache_dir.resolve()
+            if args.extract_cache_dir is not None
+            else resolved_output_dir / "_extract_cache"
+        )
     return TransformConfig(
         replay_dir=args.replay_dir.resolve(),
-        output_dir=args.output_dir.resolve(),
+        output_dir=resolved_output_dir,
         data_dir=args.data_dir.resolve(),
         py_chronodivide_script=args.py_chronodivide_script.resolve(),
+        extract_cache_dir=extract_cache_dir,
+        refresh_extract_cache=bool(args.refresh_extract_cache),
         replay_glob=args.replay_glob,
         replay_start=max(0, args.replay_start),
         max_replays=args.max_replays,

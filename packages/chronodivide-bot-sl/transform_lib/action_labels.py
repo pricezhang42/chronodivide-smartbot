@@ -298,7 +298,7 @@ def augment_dataset_with_feature_context_v1(dataset: dict[str, Any]) -> None:
         sample["legacyFeatureTensors"] = copy.deepcopy(sample["featureTensors"])
         previous_delay = LABEL_LAYOUT_V1_MISSING_INT
         legacy_last_action_context = sample["legacyFeatureTensors"].get("lastActionContext", [])
-        if legacy_last_action_context:
+        if len(legacy_last_action_context) > 0:
             previous_delay = int(legacy_last_action_context[0])
         sample["featureTensors"]["lastActionContext"] = [
             previous_delay,

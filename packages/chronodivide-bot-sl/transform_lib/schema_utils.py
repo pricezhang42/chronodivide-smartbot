@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+import numpy as np
 import torch
 
 from transform_lib.common import feature_dtype, label_dtype, schema_dtype_to_torch
@@ -32,7 +33,9 @@ def get_section_shape(schema_sections: list[dict[str, Any]], section_name: str) 
 
 
 def infer_nested_shape(value: Any) -> tuple[int, ...]:
-    if not isinstance(value, list):
+    if isinstance(value, np.ndarray):
+        return tuple(int(dimension) for dimension in value.shape)
+    if not isinstance(value, (list, tuple)):
         return ()
     if not value:
         return (0,)
@@ -46,7 +49,9 @@ def infer_nested_shape(value: Any) -> tuple[int, ...]:
 
 
 def flatten_nested_values(value: Any) -> list[float | int]:
-    if not isinstance(value, list):
+    if isinstance(value, np.ndarray):
+        return value.reshape(-1).tolist()
+    if not isinstance(value, (list, tuple)):
         return [value]
 
     flattened: list[float | int] = []
@@ -56,7 +61,9 @@ def flatten_nested_values(value: Any) -> list[float | int]:
 
 
 def flatten_js_nested_numbers(value: Any) -> list[float | int]:
-    if not isinstance(value, list):
+    if isinstance(value, np.ndarray):
+        return value.reshape(-1).tolist()
+    if not isinstance(value, (list, tuple)):
         return [value]
 
     flattened: list[float | int] = []
@@ -170,8 +177,8 @@ def validate_flat_matches_sections(samples: list[dict[str, Any]], schema: dict[s
 def build_tensors(samples: list[dict[str, Any]]) -> tuple[torch.Tensor, torch.Tensor]:
     feature_rows = [sample["flatFeatureTensor"] for sample in samples]
     label_rows = [sample["flatLabelTensor"] for sample in samples]
-    features = torch.tensor(feature_rows, dtype=feature_dtype())
-    labels = torch.tensor(label_rows, dtype=label_dtype())
+    features = torch.from_numpy(np.asarray(feature_rows, dtype=np.float32)).to(dtype=feature_dtype())
+    labels = torch.from_numpy(np.asarray(label_rows, dtype=np.int64)).to(dtype=label_dtype())
     return features, labels
 
 
@@ -180,11 +187,19 @@ def build_structured_section_tensors(
     schema_sections: list[dict[str, Any]],
     tensor_key: str,
 ) -> dict[str, torch.Tensor]:
+    dtype_to_numpy = {
+        "float32": np.float32,
+        "float64": np.float64,
+        "int32": np.int32,
+        "int64": np.int64,
+    }
     section_tensors: dict[str, torch.Tensor] = {}
     for section in schema_sections:
         section_name = section["name"]
         rows = [sample[tensor_key][section_name] for sample in samples]
-        section_tensors[section_name] = torch.tensor(rows, dtype=schema_dtype_to_torch(str(section["dtype"])))
+        numpy_dtype = dtype_to_numpy[str(section["dtype"])]
+        section_array = np.asarray(rows, dtype=numpy_dtype)
+        section_tensors[section_name] = torch.from_numpy(section_array).to(dtype=schema_dtype_to_torch(str(section["dtype"])))
     return section_tensors
 
 
