@@ -62,6 +62,10 @@ from transform_lib.filtering import (
     build_filter_config,
     build_player_action_counts,
 )
+from transform_lib.feature_layout import (
+    augment_dataset_with_available_action_mask,
+    augment_dataset_with_owned_composition_bow,
+)
 from transform_lib.schema_utils import (
     build_sample_context_tensors,
     build_section_offsets,
@@ -230,6 +234,7 @@ def write_player_shard(
         "playerCounts": player_counts,
         "actionFilter": filter_stats,
         "filterConfig": dataset["filterConfig"],
+        "featureLayoutV1": dataset.get("featureLayoutV1"),
         "featureContextV1": dataset.get("featureContextV1"),
         "labelLayoutV1": dataset.get("labelLayoutV1"),
         "tensorPath": str(tensor_path),
@@ -259,6 +264,8 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
     augment_dataset_with_label_layout_v1(dataset)
     register_dataset_action_types_globally(dataset, run_state)
     augment_dataset_with_feature_context_v1(dataset)
+    augment_dataset_with_available_action_mask(dataset)
+    augment_dataset_with_owned_composition_bow(dataset)
     dataset["filterConfig"] = build_filter_config(config)
     grouped_samples = group_samples_by_player(dataset.get("samples", []))
     if not grouped_samples:

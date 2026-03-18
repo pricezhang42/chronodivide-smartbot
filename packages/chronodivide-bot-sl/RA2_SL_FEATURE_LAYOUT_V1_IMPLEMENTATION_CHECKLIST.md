@@ -148,15 +148,15 @@ It does not include:
 
 ## Phase 5: Priority 0 - `availableActionMask`
 
-- `[ ]` Add a builder that emits `availableActionMask` with width equal to the static SL action dict size.
+- `[x]` Add a builder that emits `availableActionMask` with width equal to the static SL action dict size.
 
-- `[ ]` Decompose mask generation into explicit sources:
+- `[x]` Decompose mask generation into explicit sources:
   - selection-driven order availability
   - queue/sidebar action availability
   - building placement availability
   - super-weapon availability
 
-- `[ ]` Implement a first conservative version:
+- `[x]` Implement a first conservative version:
   - confidently disable clearly impossible actions
   - leave ambiguous actions enabled
 
@@ -170,25 +170,30 @@ It does not include:
   - per-action disable frequency
   - top action types that are almost always disabled or always enabled
 
-- `[ ]` Validate on representative replays that actually observed action types are almost always enabled at the action step.
+- `[x]` Validate on representative replays that actually observed action types are almost always enabled at the action step.
 
 ## Phase 6: Priority 0 - `ownedCompositionBow`
 
-- `[ ]` Freeze the composition vocabulary source.
+- `[x]` Freeze the composition vocabulary source.
   Recommendation:
   - use a static object-name vocabulary aligned to the current RA2 ruleset
   - keep unknown fallback buckets
 
-- `[ ]` Add:
+- `[x]` Add:
   - `ownedUnitCountBow`
   - `ownedBuildingCountBow`
+  Implementation note:
+  - the current transformer stores these as two rows inside one `ownedCompositionBow` section
 
-- `[ ]` Base these on self-known current state, not visibility-limited state.
+- `[x]` Base these on self-known current state, not visibility-limited state.
 
-- `[ ]` Save vocabulary metadata in the run manifest:
+- `[~]` Save vocabulary metadata in the run manifest:
   - id -> object name
   - object name -> id
   - unknown bucket policy
+  Current state:
+  - vocabulary metadata is already saved in shard-level `featureLayoutV1` metadata
+  - promote it into the run manifest when the feature-layout manifest block is added
 
 - `[ ]` Add a composition audit:
   - top occupied slots

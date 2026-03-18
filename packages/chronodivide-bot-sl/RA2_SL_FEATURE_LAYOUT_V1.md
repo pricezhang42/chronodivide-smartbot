@@ -174,6 +174,9 @@ V1 policy:
 
 - use current owned state only
 - do not limit this to visible units; self-owned state is known
+- use a static ruleset-seeded vocabulary with an explicit unknown bucket
+- in the current transformer implementation, store the split as a single
+  `ownedCompositionBow` section with two rows: `units` and `buildings`
 
 Why:
 
