@@ -7,6 +7,11 @@ const OBJECT_TYPE = {
   Vehicle: 7,
 };
 
+const SPEED_TYPE = {
+  Foot: 0,
+  Track: 1,
+};
+
 const RELATIONS = ["self", "allied", "enemy", "neutral", "otherHostile"];
 
 const SCALAR_FEATURE_NAMES = [
@@ -141,6 +146,14 @@ const MINIMAP_CHANNEL_NAMES = [
   "self_start_location",
 ];
 
+const STATIC_MAP_CHANNEL_NAMES = [
+  "foot_passable",
+  "track_passable",
+  "buildable_reference",
+  "terrain_height_norm",
+  "start_locations",
+];
+
 function boolToNumber(value) {
   return value ? 1 : 0;
 }
@@ -218,6 +231,10 @@ function createMinimapPlanes(size) {
   return createPlanes(MINIMAP_CHANNEL_NAMES, size);
 }
 
+function createStaticMapPlanes(size) {
+  return createPlanes(STATIC_MAP_CHANNEL_NAMES, size);
+}
+
 function tileToGrid(tile, map, spatialSize) {
   const maxX = Math.max(1, map.width - 1);
   const maxY = Math.max(1, map.height - 1);
@@ -241,6 +258,91 @@ function incrementPlane(plane, x, y, value = 1) {
 function markTileOnPlane(plane, tile, map, size, value = 1) {
   const { gridX, gridY } = tileToGrid(tile, map, size);
   incrementPlane(plane, gridX, gridY, value);
+}
+
+export function getStaticMapFeatureSchema({ spatialSize = 32 } = {}) {
+  return {
+    staticMapChannelNames: STATIC_MAP_CHANNEL_NAMES.slice(),
+    spatialSize,
+    notes: [
+      "Static map features are replay-constant, observation-safe priors derived at replay start.",
+      "Buildability uses a caller-supplied reference building and ignores adjacency checks in the first pass.",
+      "Passability is summarized as a fraction of tiles in each grid cell that are passable for the chosen speed type.",
+    ],
+  };
+}
+
+export function extractStaticMapFeatureSample(
+  gameApi,
+  { playerName, spatialSize = 32, buildabilityReferenceName = null } = {},
+) {
+  if (!playerName) {
+    throw new Error("extractStaticMapFeatureSample requires a playerName.");
+  }
+
+  const planes = createStaticMapPlanes(spatialSize);
+  const countPlane = createEmptyPlane(spatialSize);
+  const map = gameApi.map;
+  const size = map.getRealMapSize();
+  const tiles = map.getTilesInRect({ x: 0, y: 0, width: size.width, height: size.height });
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+
+  for (const tile of tiles) {
+    const z = safeNumber(tile?.z);
+    if (z < minZ) {
+      minZ = z;
+    }
+    if (z > maxZ) {
+      maxZ = z;
+    }
+  }
+  const zRange = Math.max(1, maxZ - minZ);
+
+  for (const tile of tiles) {
+    const tilePoint = { x: tile.rx ?? tile.x, y: tile.ry ?? tile.y };
+    const { gridX, gridY } = tileToGrid(tilePoint, { width: size.width, height: size.height }, spatialSize);
+    countPlane[gridY][gridX] += 1;
+
+    const onBridge = map.hasBridgeOnTile(tile);
+    const footPassable = map.isPassableTile(tile, SPEED_TYPE.Foot, false, false) || (onBridge && map.isPassableTile(tile, SPEED_TYPE.Foot, true, false));
+    const trackPassable = map.isPassableTile(tile, SPEED_TYPE.Track, false, false) || (onBridge && map.isPassableTile(tile, SPEED_TYPE.Track, true, false));
+    const buildableReference =
+      buildabilityReferenceName !== null
+        ? gameApi.canPlaceBuilding(playerName, buildabilityReferenceName, tile, { ignoreAdjacent: true })
+        : false;
+    const heightNorm = clamp((safeNumber(tile?.z) - minZ) / zRange, 0, 1);
+
+    incrementPlane(planes[0], gridX, gridY, boolToNumber(footPassable));
+    incrementPlane(planes[1], gridX, gridY, boolToNumber(trackPassable));
+    incrementPlane(planes[2], gridX, gridY, boolToNumber(buildableReference));
+    incrementPlane(planes[3], gridX, gridY, heightNorm);
+  }
+
+  for (let y = 0; y < spatialSize; y += 1) {
+    for (let x = 0; x < spatialSize; x += 1) {
+      const count = countPlane[y][x];
+      if (!count) {
+        continue;
+      }
+      planes[0][y][x] /= count;
+      planes[1][y][x] /= count;
+      planes[2][y][x] /= count;
+      planes[3][y][x] /= count;
+    }
+  }
+
+  for (const location of map.getStartingLocations()) {
+    markTileOnPlane(planes[4], location, { width: size.width, height: size.height }, spatialSize, 1);
+  }
+
+  return {
+    channelNames: STATIC_MAP_CHANNEL_NAMES.slice(),
+    width: spatialSize,
+    height: spatialSize,
+    buildabilityReferenceName,
+    data: planes,
+  };
 }
 
 function aggregateRelation(units) {

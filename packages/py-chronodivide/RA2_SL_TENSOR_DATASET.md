@@ -21,6 +21,19 @@ Replay metadata now also carries per-player replay-global identity fields alongs
 
 These are intended for downstream feature builders such as SL scalar identity features.
 
+The dataset payload can also carry replay-constant static map tensors keyed by player:
+
+- `staticMapSchema`
+- `staticMapByPlayer`
+
+These are intended for downstream feature builders such as `mapStatic`.
+
+It can also carry replay-constant super-weapon recharge metadata:
+
+- `superWeaponSchema`
+
+This is intended for downstream feature builders that need to normalize replay `timerSeconds` by per-type nominal `RechargeTime` from the ruleset.
+
 ## Extraction Model
 
 The dataset is action-centric.
@@ -30,6 +43,7 @@ For each kept replay action, the extractor records:
 - the observation tensor before the action is processed
 - the inferred current selection before the action
 - the previous kept action context
+- the acting player's generic production snapshot before the action
 - the decoded label tensor for the current action
 
 This is intentionally close to the `transform_replay_data.py` idea in mini-AlphaStar, where the current observation is paired with the current action label and previous-action context.
@@ -73,6 +87,13 @@ The added SL-specific context is:
 
 - previous kept action delay / raw action id / family id / queue flag
 - current inferred selection before the action
+
+In addition to the tensor sections, each action-aligned sample now also carries:
+
+- `playerProduction`
+- `playerSuperWeapons`
+
+These stay as generic raw summaries for downstream projects to turn into their own feature layout.
 
 ## Label Tensor Sections
 

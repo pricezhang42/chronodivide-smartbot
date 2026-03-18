@@ -221,29 +221,37 @@ It does not include:
 
 ## Phase 8: Priority 1 - `buildOrderTrace`
 
-- `[ ]` Freeze `BUILD_ORDER_TRACE_LEN`.
+- `[x]` Freeze `BUILD_ORDER_TRACE_LEN`.
 
-- `[ ]` Define which actions contribute to the trace.
+- `[x]` Define which actions contribute to the trace.
   Recommendation:
   - self production/build actions only
   - static action dict ids where meaningful
   - exclude UI-only or purely selection-only actions
+  Current V1 policy:
+  - `Queue::Add::*`
+  - `PlaceBuilding::*`
+  - `Order::Deploy::*`
+  - `Order::DeploySelected::*`
 
-- `[ ]` Add a fixed-length early-game `buildOrderTrace` section.
+- `[x]` Add a fixed-length early-game `buildOrderTrace` section.
 
-- `[ ]` Define padding and truncation policy:
+- `[x]` Define padding and truncation policy:
   - pad with `-1`
   - keep earliest events only for V1
 
-- `[ ]` Validate against several replay openings:
+- `[~]` Validate against several replay openings:
   - power-first
   - refinery-first
   - barracks-first
   - war-factory / air opening variants if present
+  Current state:
+  - smoke validation completed on two real replays with different openings and countries
+  - broader opening-pattern validation is still worth doing on a larger replay slice
 
 ## Phase 9: Priority 1 - `techState`
 
-- `[ ]` Freeze the V1 tech-state vocabulary.
+- `[x]` Freeze the V1 tech-state vocabulary.
   Suggested groups:
   - prerequisite-building flags
   - tech-building flags
@@ -251,56 +259,92 @@ It does not include:
   - special-tech or branch flags
   - power-satisfied flags
 
-- `[ ]` Implement `techState` from self-known owned state only.
+- `[x]` Implement `techState` from self-known owned state only.
 
-- `[ ]` Add shard metadata documenting:
+- `[x]` Add shard metadata documenting:
   - feature names
   - bit positions
   - ruleset assumptions
 
-- `[ ]` Add validation for prerequisite consistency.
+- `[~]` Add validation for prerequisite consistency.
   Example checks:
   - if a high-tier production action is available, prerequisite flags should usually agree
   - if a prerequisite building is absent, dependent availability should not be confidently enabled unless ambiguity policy says otherwise
+  Current state:
+  - smoke validation covers section presence and real replay values
+  - dedicated prerequisite-consistency audit is still worth adding
 
 ## Phase 10: Priority 1 - `productionState`
 
-- `[ ]` Confirm which generic production fields are already available in `py-chronodivide`.
+- `[x]` Confirm which generic production fields are already available in `py-chronodivide`.
+  Current state:
+  - generic production summaries already exist in `snapshot.mjs`
+  - V1 now uses `maxTechLevel`, `buildSpeedModifier`, `queueCount`, queue summaries, factory counts, and available-count summaries by queue type
 
-- `[ ]` If needed, patch `py-chronodivide` generically to expose:
+- `[x]` If needed, patch `py-chronodivide` generically to expose:
   - active queues
   - current production item
   - progress
   - hold / paused state
   - construction-yard placement mode
   - rally summary if available
+  Current state:
+  - `sl_dataset.mjs` now carries per-sample `playerProduction`
+  - `snapshot.mjs` now exports `availableCountsByQueueType` alongside queue summaries
+  - rally summary is still future work
 
-- `[ ]` Add `productionState` to the canonical feature layout.
+- `[x]` Add `productionState` to the canonical feature layout.
 
-- `[ ]` Freeze a stable representation for queue slots and categories.
+- `[x]` Freeze a stable representation for queue slots and categories.
   Recommendation:
   - summarize by queue or building category first
   - avoid overfitting V1 to an unstable UI layout
+  Current V1 policy:
+  - `productionState` is a compact `100`-wide vector
+  - one global block plus six queue-type summaries:
+    - `Structures`
+    - `Armory`
+    - `Infantry`
+    - `Vehicles`
+    - `Aircrafts`
+    - `Ships`
+  - each queue summary stores factory count, available count, queue status flags, occupancy, and first-item summary
 
-- `[ ]` Validate production-state alignment on real queue actions:
+- `[~]` Validate production-state alignment on real queue actions:
   - `Queue::Add::*`
   - `Queue::Hold::*`
   - `Queue::Cancel::*`
   - building placement follow-through after construction-yard production
+  Current state:
+  - smoke validation completed on two real replays from different maps
+  - saved `productionState` tensors show `Structures` queue transitions through `Idle -> Active -> Ready`
+  - infantry queue activity appears in real samples once barracks production starts
+  - dedicated hold/cancel focused validation is still worth adding on a larger slice
 
 ## Phase 11: Priority 2 - `enemyMemoryBow`
 
-- `[ ]` Freeze the memory vocabulary:
+- `[x]` Freeze the memory vocabulary:
   - seen enemy buildings
   - seen enemy units
   - seen enemy tech flags
+  Current V1 policy:
+  - reuse the static composition vocabulary for seen enemy unit/building counts
+  - add a companion `enemyMemoryTechFlags` section for seen enemy tech and unlock summaries
 
-- `[ ]` Add a replay-time memory accumulator keyed by player perspective.
+- `[x]` Add a replay-time memory accumulator keyed by player perspective.
 
-- `[ ]` Ensure memory updates only from observation-safe visibility.
+- `[x]` Ensure memory updates only from observation-safe visibility.
+  Current V1 policy:
+  - update memory only from currently visible enemy entities in the safe observation tensor
+  - store monotonic `max_visible_count_so_far` counts by name bucket
+  - derive seen-tech flags only from enemy building names that have been observed
 
-- `[ ]` Add validation for monotonicity:
+- `[x]` Add validation for monotonicity:
   - seen-enemy-building counts or flags should not disappear unless V1 intentionally allows forgetting
+  Current state:
+  - smoke validation on the early two-replay slice confirmed monotonic rows
+  - a deeper one-replay slice reached enemy contact and still showed monotonic unit/building memory rows
+  - first nonzero memory examples included `DOG`, `SENGINEER`, `NAHAND`, `NAPOWR`, `GAPILE`, and `GAPILL`
 
 - `[ ]` Add a manifest summary:
   - most common seen enemy structures
@@ -309,27 +353,71 @@ It does not include:
 
 ## Phase 12: Priority 2 - `superWeaponState`
 
-- `[ ]` Confirm which super-weapon readiness / cooldown fields are exposed generically today.
+- `[x]` Confirm which super-weapon readiness / cooldown fields are exposed generically today.
+  Current state:
+  - `py-chronodivide` now carries per-sample `playerSuperWeapons` summaries
+  - generic fields available today are:
+    - `type`
+    - `typeName`
+    - `status`
+    - `statusName`
+    - `timerSeconds`
 
-- `[ ]` If needed, patch `py-chronodivide` generically first.
+- `[x]` If needed, patch `py-chronodivide` generically first.
+  Current state:
+  - `superWeaponToPlain(...)` is now exported generically from `snapshot.mjs`
+  - `sl_dataset.mjs` now carries `playerSuperWeapons` per action-aligned sample for downstream feature builders
 
-- `[ ]` Add:
+- `[x]` Add:
   - presence flags
   - ready / not-ready flags
   - cooldown or charge progress
   - availability flags if distinct from readiness
+  Current V1 policy:
+  - `superWeaponState` is a compact `47`-wide vector
+  - one global block plus per-type summaries for:
+    - `MultiMissile`
+    - `IronCurtain`
+    - `LightningStorm`
+    - `ChronoSphere`
+    - `ChronoWarp`
+    - `ParaDrop`
+    - `AmerParaDrop`
+  - each type summary stores:
+    - `count`
+    - `has`
+    - `status_charging`
+    - `status_paused`
+    - `status_ready`
+    - `charge_progress_01`
+  - no distinct availability field is exposed generically today, so V1 uses `status_ready` as the first-pass availability/readiness signal
+  - `charge_progress_01` is normalized against per-type nominal `RechargeTime` values from `rules.ini`
+  - rule `RechargeTime` values are interpreted as minutes and converted to seconds before comparing against replay `timerSeconds`
 
-- `[ ]` Validate against replays with observed super-weapon actions.
+- `[x]` Validate against replays with observed super-weapon actions.
+  Current state:
+  - full replay validation on `00758dde-b725-4442-ae8f-a657069251a0.rpl` produced nonzero `superWeaponState` tensors for both players
+  - first live vectors showed `ParaDrop` charging with normalized progress near `0.003-0.025`
+  - later samples in the same replay reached `Ready` for `ParaDrop`, and `bikerush` also reached nonzero `AmerParaDrop`
 
 ## Phase 13: Priority 2 - `mapStatic`
 
-- `[ ]` Promote the existing static map dump into feature-ready sections.
+- `[x]` Promote the existing static map dump into feature-ready sections.
+  Current state:
+  - `py-chronodivide` now emits replay-constant compact static-map tensors per sampled player
+  - `chronodivide-bot-sl` attaches them as a separate `mapStatic` feature section
 
-- `[ ]` Freeze the first map-static channels:
+- `[x]` Freeze the first map-static channels:
   - pathability
   - buildability
   - terrain-height summary
   - start locations
+  Current V1 channels:
+  - `foot_passable`
+  - `track_passable`
+  - `buildable_reference`
+  - `terrain_height_norm`
+  - `start_locations`
 
 - `[ ]` Add second-wave channels after the first pass works:
   - bridge topology
@@ -337,12 +425,19 @@ It does not include:
   - ore / gem priors
   - choke / connectivity hints if practical
 
-- `[ ]` Decide representation policy:
+- `[x]` Decide representation policy:
   - separate `mapStatic` branch
   - merged extra spatial channels
   - or both
+  Current V1 policy:
+  - separate `mapStatic` branch only
 
-- `[ ]` Validate on at least two different maps with clearly different geometry.
+- `[x]` Validate on at least two different maps with clearly different geometry.
+  Current state:
+  - smoke validation completed on `2_pinch_point_le.map` and `4_caverns_v410.map`
+  - `mapStatic` is replay-constant within a shard
+  - channel sums differed across maps as expected
+  - `buildable_reference` also differed across GDI and Nod players on the same map
 
 ## Phase 14: Entity Intent / Order Summaries
 

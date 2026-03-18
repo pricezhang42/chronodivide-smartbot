@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from action_dict import ACTION_TYPE_ID_TO_NAME, PLACE_BUILDING_NAMES, QUEUE_ITEM_NAMES
+from transform_lib.common import LABEL_LAYOUT_V1_MISSING_INT
 
 from transform_lib.schema_utils import append_schema_section, compute_flat_length
 
@@ -74,6 +75,7 @@ OWNED_COMPOSITION_NAME_TO_ID = {
     name: index for index, name in enumerate(OWNED_COMPOSITION_VOCABULARY)
 }
 OWNED_COMPOSITION_ROW_NAMES = ["units", "buildings"]
+BUILD_ORDER_TRACE_LEN = 20
 IDENTITY_UNKNOWN_NAME = "<unk>"
 SIDE_ID_TO_NAME = {
     0: "GDI",
@@ -106,6 +108,128 @@ COUNTRY_VOCABULARY = [
     "Yuri",
 ]
 COUNTRY_NAME_TO_ID = {name: index for index, name in enumerate(COUNTRY_VOCABULARY)}
+POWER_BUILDING_NAMES = {"GAPOWR", "NAPOWR", "NANRCT", "YAPOWR"}
+BARRACKS_NAMES = {"GAPILE", "NAHAND", "YABRCK"}
+REFINERY_NAMES = {"GAREFN", "NAREFN", "YAREFN"}
+FACTORY_NAMES = {"GAWEAP", "NAWEAP", "YAWEAP"}
+AIRFIELD_NAMES = {"GAAIRC"}
+NAVAL_YARD_NAMES = {"GAYARD", "NAYARD"}
+RADAR_NAMES = {"AMRADR", "NARADR"}
+SERVICE_DEPOT_NAMES = {"GADEPT", "NADEPT"}
+TECH_CENTER_NAMES = {"GATECH", "NATECH"}
+ORE_PURIFIER_NAMES = {"GAOREP"}
+GAP_GENERATOR_NAMES = {"GAGAP"}
+CLONING_VAT_NAMES = {"NACLON"}
+PSYCHIC_SENSOR_NAMES = {"NAPSIS", "YAPSIS"}
+NUCLEAR_SILO_NAMES = {"NAMISL"}
+IRON_CURTAIN_NAMES = {"NAIRON"}
+WEATHER_CONTROL_NAMES = {"GAWEAT"}
+CHRONOSPHERE_NAMES = {"GACSPH"}
+TECH_STATE_FLAG_NAMES = [
+    "owned_has_construction_yard",
+    "owned_has_power",
+    "owned_has_barracks",
+    "owned_has_refinery",
+    "owned_has_factory",
+    "owned_has_airfield",
+    "owned_has_naval_yard",
+    "owned_has_radar",
+    "owned_has_service_depot",
+    "owned_has_tech_center",
+    "owned_has_ore_purifier",
+    "owned_has_gap_generator",
+    "owned_has_cloning_vat",
+    "owned_has_psychic_sensor",
+    "owned_has_nuclear_silo",
+    "owned_has_iron_curtain",
+    "owned_has_weather_control",
+    "owned_has_chronosphere",
+    "unlocks_infantry_production",
+    "unlocks_vehicle_production",
+    "unlocks_air_production",
+    "unlocks_naval_production",
+    "unlocks_tier2",
+    "unlocks_tier3",
+    "power_low",
+    "power_satisfied",
+]
+PRODUCTION_QUEUE_TYPE_NAMES = ["Structures", "Armory", "Infantry", "Vehicles", "Aircrafts", "Ships"]
+PRODUCTION_QUEUE_STATUS_NAMES = ["Idle", "Active", "OnHold", "Ready"]
+PRODUCTION_STATE_GLOBAL_FEATURE_NAMES = [
+    "production_max_tech_level",
+    "production_build_speed_modifier",
+    "production_queue_count",
+    "production_available_object_count",
+]
+PRODUCTION_STATE_QUEUE_FEATURE_SUFFIXES = [
+    "factory_count",
+    "available_count",
+    "has_queue",
+    "status_idle",
+    "status_active",
+    "status_on_hold",
+    "status_ready",
+    "size",
+    "max_size",
+    "max_item_quantity",
+    "has_items",
+    "total_item_quantity",
+    "first_item_name_token",
+    "first_item_quantity",
+    "first_item_progress",
+    "first_item_cost",
+]
+SUPER_WEAPON_STATE_TYPE_NAMES = [
+    "MultiMissile",
+    "IronCurtain",
+    "LightningStorm",
+    "ChronoSphere",
+    "ChronoWarp",
+    "ParaDrop",
+    "AmerParaDrop",
+]
+SUPER_WEAPON_STATUS_NAMES = ["Charging", "Paused", "Ready"]
+SUPER_WEAPON_STATE_GLOBAL_FEATURE_NAMES = [
+    "super_weapon_count",
+    "super_weapon_unknown_type_count",
+    "super_weapon_charging_count",
+    "super_weapon_paused_count",
+    "super_weapon_ready_count",
+]
+SUPER_WEAPON_STATE_PER_TYPE_FEATURE_SUFFIXES = [
+    "count",
+    "has",
+    "status_charging",
+    "status_paused",
+    "status_ready",
+    "charge_progress_01",
+]
+ENEMY_MEMORY_TECH_FLAG_NAMES = [
+    "seen_enemy_has_construction_yard",
+    "seen_enemy_has_power",
+    "seen_enemy_has_barracks",
+    "seen_enemy_has_refinery",
+    "seen_enemy_has_factory",
+    "seen_enemy_has_airfield",
+    "seen_enemy_has_naval_yard",
+    "seen_enemy_has_radar",
+    "seen_enemy_has_service_depot",
+    "seen_enemy_has_tech_center",
+    "seen_enemy_has_ore_purifier",
+    "seen_enemy_has_gap_generator",
+    "seen_enemy_has_cloning_vat",
+    "seen_enemy_has_psychic_sensor",
+    "seen_enemy_has_nuclear_silo",
+    "seen_enemy_has_iron_curtain",
+    "seen_enemy_has_weather_control",
+    "seen_enemy_has_chronosphere",
+    "seen_enemy_unlocks_infantry_production",
+    "seen_enemy_unlocks_vehicle_production",
+    "seen_enemy_unlocks_air_production",
+    "seen_enemy_unlocks_naval_production",
+    "seen_enemy_unlocks_tier2",
+    "seen_enemy_unlocks_tier3",
+]
 
 
 def build_feature_layout_v1_contract() -> dict[str, object]:
@@ -152,6 +276,61 @@ def _normalize_owned_object_name(name: str | None) -> str:
 
 def _identity_suffix(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_") or "unknown"
+
+
+def _build_production_state_feature_names() -> list[str]:
+    feature_names = list(PRODUCTION_STATE_GLOBAL_FEATURE_NAMES)
+    for queue_type_name in PRODUCTION_QUEUE_TYPE_NAMES:
+        queue_prefix = _identity_suffix(queue_type_name).lower()
+        feature_names.extend(
+            f"production_{queue_prefix}_{feature_suffix}"
+            for feature_suffix in PRODUCTION_STATE_QUEUE_FEATURE_SUFFIXES
+        )
+    return feature_names
+
+
+PRODUCTION_STATE_FEATURE_NAMES = _build_production_state_feature_names()
+
+
+def _build_super_weapon_state_feature_names() -> list[str]:
+    feature_names = list(SUPER_WEAPON_STATE_GLOBAL_FEATURE_NAMES)
+    for type_name in SUPER_WEAPON_STATE_TYPE_NAMES:
+        type_prefix = _identity_suffix(type_name).lower()
+        feature_names.extend(
+            f"super_weapon_{type_prefix}_{feature_suffix}"
+            for feature_suffix in SUPER_WEAPON_STATE_PER_TYPE_FEATURE_SUFFIXES
+        )
+    return feature_names
+
+
+SUPER_WEAPON_STATE_FEATURE_NAMES = _build_super_weapon_state_feature_names()
+
+
+def _name_token_from_shared_vocabulary(dataset: dict[str, Any], value: str | None) -> int:
+    if not value:
+        return LABEL_LAYOUT_V1_MISSING_INT
+    vocabulary = dataset["schema"].get("sharedNameVocabulary", {})
+    name_to_id = vocabulary.get("nameToId", {})
+    if not isinstance(name_to_id, dict):
+        return LABEL_LAYOUT_V1_MISSING_INT
+    if value in name_to_id:
+        return int(name_to_id[value])
+    return int(name_to_id.get("<unk>", LABEL_LAYOUT_V1_MISSING_INT))
+
+
+def _safe_float(value: Any, fallback: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(fallback)
+
+
+def _safe_optional_float(value: Any) -> float | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if numeric >= 0.0 else None
 
 
 def _find_replay_player(dataset: dict[str, Any], player_name: str) -> dict[str, Any] | None:
@@ -243,6 +422,32 @@ def _collect_self_entities(sample: dict[str, Any], dataset: dict[str, Any]) -> l
                 "name": _decode_name_token(schema, int(entity_names[entity_index])),
                 "isBuilding": float(feature_row[object_building_index]) > 0.5,
                 "canMove": float(feature_row[can_move_index]) > 0.5,
+            }
+        )
+    return entities
+
+
+def _collect_enemy_entities(sample: dict[str, Any], dataset: dict[str, Any]) -> list[dict[str, Any]]:
+    schema = dataset["schema"]
+    relation_enemy_index = _feature_name_index(schema, "relation_enemy")
+    object_building_index = _feature_name_index(schema, "object_building")
+
+    entity_mask = sample["featureTensors"]["entityMask"]
+    entity_names = sample["featureTensors"]["entityNameTokens"]
+    entity_features = sample["featureTensors"]["entityFeatures"]
+    entities: list[dict[str, Any]] = []
+
+    for entity_index, active in enumerate(entity_mask):
+        if int(active) == 0:
+            continue
+        feature_row = entity_features[entity_index]
+        if float(feature_row[relation_enemy_index]) <= 0.5:
+            continue
+        entities.append(
+            {
+                "index": entity_index,
+                "name": _decode_name_token(schema, int(entity_names[entity_index])),
+                "isBuilding": float(feature_row[object_building_index]) > 0.5,
             }
         )
     return entities
@@ -401,6 +606,248 @@ def build_scalar_core_identity(sample: dict[str, Any], dataset: dict[str, Any]) 
     ]
 
 
+def build_tech_state(sample: dict[str, Any], dataset: dict[str, Any]) -> list[int]:
+    schema = dataset["schema"]
+    scalar = sample["featureTensors"]["scalar"]
+    self_entity_names = {entity["name"] for entity in _collect_self_entities(sample, dataset) if entity["name"]}
+    power_low = float(scalar[_scalar_name_index(schema, "power_low")]) > 0.5
+
+    flags = {
+        "owned_has_construction_yard": bool(self_entity_names & CONSTRUCTION_YARD_NAMES),
+        "owned_has_power": bool(self_entity_names & POWER_BUILDING_NAMES),
+        "owned_has_barracks": bool(self_entity_names & BARRACKS_NAMES),
+        "owned_has_refinery": bool(self_entity_names & REFINERY_NAMES),
+        "owned_has_factory": bool(self_entity_names & FACTORY_NAMES),
+        "owned_has_airfield": bool(self_entity_names & AIRFIELD_NAMES),
+        "owned_has_naval_yard": bool(self_entity_names & NAVAL_YARD_NAMES),
+        "owned_has_radar": bool(self_entity_names & RADAR_NAMES),
+        "owned_has_service_depot": bool(self_entity_names & SERVICE_DEPOT_NAMES),
+        "owned_has_tech_center": bool(self_entity_names & TECH_CENTER_NAMES),
+        "owned_has_ore_purifier": bool(self_entity_names & ORE_PURIFIER_NAMES),
+        "owned_has_gap_generator": bool(self_entity_names & GAP_GENERATOR_NAMES),
+        "owned_has_cloning_vat": bool(self_entity_names & CLONING_VAT_NAMES),
+        "owned_has_psychic_sensor": bool(self_entity_names & PSYCHIC_SENSOR_NAMES),
+        "owned_has_nuclear_silo": bool(self_entity_names & NUCLEAR_SILO_NAMES),
+        "owned_has_iron_curtain": bool(self_entity_names & IRON_CURTAIN_NAMES),
+        "owned_has_weather_control": bool(self_entity_names & WEATHER_CONTROL_NAMES),
+        "owned_has_chronosphere": bool(self_entity_names & CHRONOSPHERE_NAMES),
+    }
+    flags.update(
+        {
+            "unlocks_infantry_production": flags["owned_has_barracks"],
+            "unlocks_vehicle_production": flags["owned_has_factory"],
+            "unlocks_air_production": flags["owned_has_airfield"],
+            "unlocks_naval_production": flags["owned_has_naval_yard"],
+            "unlocks_tier2": flags["owned_has_radar"] or flags["owned_has_service_depot"] or flags["owned_has_tech_center"],
+            "unlocks_tier3": flags["owned_has_tech_center"],
+            "power_low": power_low,
+            "power_satisfied": not power_low,
+        }
+    )
+    return [int(flags[name]) for name in TECH_STATE_FLAG_NAMES]
+
+
+def build_production_state(sample: dict[str, Any], dataset: dict[str, Any]) -> list[float]:
+    player_production = sample.get("playerProduction") or {}
+    queues = player_production.get("queues", [])
+    queue_by_name = {
+        str(queue.get("typeName")): queue
+        for queue in queues
+        if isinstance(queue, dict) and isinstance(queue.get("typeName"), str)
+    }
+    factory_count_by_name = {
+        str(entry.get("queueTypeName")): _safe_float(entry.get("count"), 0.0)
+        for entry in player_production.get("factoryCounts", [])
+        if isinstance(entry, dict) and entry.get("queueTypeName") is not None
+    }
+    available_count_by_name = {
+        str(entry.get("queueTypeName")): _safe_float(entry.get("count"), 0.0)
+        for entry in player_production.get("availableCountsByQueueType", [])
+        if isinstance(entry, dict) and entry.get("queueTypeName") is not None
+    }
+
+    values: list[float] = [
+        _safe_float(player_production.get("maxTechLevel"), 0.0),
+        _safe_float(player_production.get("buildSpeedModifier"), 0.0),
+        _safe_float(player_production.get("queueCount"), 0.0),
+        _safe_float(player_production.get("availableObjectCount"), 0.0),
+    ]
+
+    for queue_type_name in PRODUCTION_QUEUE_TYPE_NAMES:
+        queue = queue_by_name.get(queue_type_name)
+        queue_items = queue.get("items", []) if isinstance(queue, dict) else []
+        first_item = queue_items[0] if queue_items else {}
+        first_item_name = first_item.get("objectName") if isinstance(first_item, dict) else None
+        first_item_name_token = _name_token_from_shared_vocabulary(dataset, str(first_item_name) if first_item_name else None)
+        queue_status_name = queue.get("statusName") if isinstance(queue, dict) else None
+        total_item_quantity = 0.0
+        for item in queue_items:
+            if isinstance(item, dict):
+                total_item_quantity += _safe_float(item.get("quantity"), 0.0)
+
+        values.extend(
+            [
+                factory_count_by_name.get(queue_type_name, 0.0),
+                available_count_by_name.get(queue_type_name, 0.0),
+                1.0 if queue else 0.0,
+                1.0 if queue_status_name == "Idle" else 0.0,
+                1.0 if queue_status_name == "Active" else 0.0,
+                1.0 if queue_status_name == "OnHold" else 0.0,
+                1.0 if queue_status_name == "Ready" else 0.0,
+                _safe_float(queue.get("size") if isinstance(queue, dict) else None, 0.0),
+                _safe_float(queue.get("maxSize") if isinstance(queue, dict) else None, 0.0),
+                _safe_float(queue.get("maxItemQuantity") if isinstance(queue, dict) else None, 0.0),
+                1.0 if queue_items else 0.0,
+                total_item_quantity,
+                float(first_item_name_token),
+                _safe_float(first_item.get("quantity") if isinstance(first_item, dict) else None, 0.0),
+                _safe_float(first_item.get("progress") if isinstance(first_item, dict) else None, 0.0),
+                _safe_float(first_item.get("cost") if isinstance(first_item, dict) else None, 0.0),
+            ]
+        )
+
+    return values
+
+
+def _normalized_super_weapon_progress(
+    status_name: str | None,
+    timer_seconds: float,
+    nominal_recharge_seconds: float | None,
+) -> float:
+    if status_name == "Ready":
+        return 1.0
+    if nominal_recharge_seconds is None or nominal_recharge_seconds <= 0.0:
+        return 0.0
+    progress = 1.0 - (max(0.0, timer_seconds) / nominal_recharge_seconds)
+    return max(0.0, min(1.0, progress))
+
+
+def build_super_weapon_state(sample: dict[str, Any], dataset: dict[str, Any]) -> list[float]:
+    player_super_weapons = sample.get("playerSuperWeapons") or []
+    known_type_names = set(SUPER_WEAPON_STATE_TYPE_NAMES)
+    recharge_seconds_by_type = ((dataset.get("superWeaponSchema") or {}).get("rechargeSecondsByType") or {})
+    status_counts = {status_name: 0.0 for status_name in SUPER_WEAPON_STATUS_NAMES}
+    type_summaries = {
+        type_name: {
+            "count": 0.0,
+            "statusFlags": {status_name: 0.0 for status_name in SUPER_WEAPON_STATUS_NAMES},
+            "chargeProgress01": 0.0,
+        }
+        for type_name in SUPER_WEAPON_STATE_TYPE_NAMES
+    }
+
+    total_count = 0.0
+    unknown_type_count = 0.0
+    for entry in player_super_weapons:
+        if not isinstance(entry, dict):
+            continue
+
+        type_name = entry.get("typeName")
+        status_name = entry.get("statusName")
+        timer_seconds = _safe_float(entry.get("timerSeconds"), 0.0)
+        total_count += 1.0
+
+        if isinstance(status_name, str) and status_name in status_counts:
+            status_counts[status_name] += 1.0
+
+        if not isinstance(type_name, str) or type_name not in known_type_names:
+            unknown_type_count += 1.0
+            continue
+
+        summary = type_summaries[type_name]
+        summary["count"] += 1.0
+        if isinstance(status_name, str) and status_name in summary["statusFlags"]:
+            summary["statusFlags"][status_name] = 1.0
+        nominal_recharge_seconds = _safe_optional_float(recharge_seconds_by_type.get(type_name))
+        progress = _normalized_super_weapon_progress(status_name, timer_seconds, nominal_recharge_seconds)
+        summary["chargeProgress01"] = max(float(summary["chargeProgress01"]), progress)
+
+    values: list[float] = [
+        total_count,
+        unknown_type_count,
+        status_counts["Charging"],
+        status_counts["Paused"],
+        status_counts["Ready"],
+    ]
+    for type_name in SUPER_WEAPON_STATE_TYPE_NAMES:
+        summary = type_summaries[type_name]
+        values.extend(
+            [
+                float(summary["count"]),
+                1.0 if summary["count"] > 0 else 0.0,
+                float(summary["statusFlags"]["Charging"]),
+                float(summary["statusFlags"]["Paused"]),
+                float(summary["statusFlags"]["Ready"]),
+                float(summary["chargeProgress01"]),
+            ]
+        )
+
+    return values
+
+
+def build_enemy_memory_tech_flags(seen_enemy_building_names: set[str]) -> list[int]:
+    flags = {
+        "seen_enemy_has_construction_yard": bool(seen_enemy_building_names & CONSTRUCTION_YARD_NAMES),
+        "seen_enemy_has_power": bool(seen_enemy_building_names & POWER_BUILDING_NAMES),
+        "seen_enemy_has_barracks": bool(seen_enemy_building_names & BARRACKS_NAMES),
+        "seen_enemy_has_refinery": bool(seen_enemy_building_names & REFINERY_NAMES),
+        "seen_enemy_has_factory": bool(seen_enemy_building_names & FACTORY_NAMES),
+        "seen_enemy_has_airfield": bool(seen_enemy_building_names & AIRFIELD_NAMES),
+        "seen_enemy_has_naval_yard": bool(seen_enemy_building_names & NAVAL_YARD_NAMES),
+        "seen_enemy_has_radar": bool(seen_enemy_building_names & RADAR_NAMES),
+        "seen_enemy_has_service_depot": bool(seen_enemy_building_names & SERVICE_DEPOT_NAMES),
+        "seen_enemy_has_tech_center": bool(seen_enemy_building_names & TECH_CENTER_NAMES),
+        "seen_enemy_has_ore_purifier": bool(seen_enemy_building_names & ORE_PURIFIER_NAMES),
+        "seen_enemy_has_gap_generator": bool(seen_enemy_building_names & GAP_GENERATOR_NAMES),
+        "seen_enemy_has_cloning_vat": bool(seen_enemy_building_names & CLONING_VAT_NAMES),
+        "seen_enemy_has_psychic_sensor": bool(seen_enemy_building_names & PSYCHIC_SENSOR_NAMES),
+        "seen_enemy_has_nuclear_silo": bool(seen_enemy_building_names & NUCLEAR_SILO_NAMES),
+        "seen_enemy_has_iron_curtain": bool(seen_enemy_building_names & IRON_CURTAIN_NAMES),
+        "seen_enemy_has_weather_control": bool(seen_enemy_building_names & WEATHER_CONTROL_NAMES),
+        "seen_enemy_has_chronosphere": bool(seen_enemy_building_names & CHRONOSPHERE_NAMES),
+    }
+    flags.update(
+        {
+            "seen_enemy_unlocks_infantry_production": flags["seen_enemy_has_barracks"],
+            "seen_enemy_unlocks_vehicle_production": flags["seen_enemy_has_factory"],
+            "seen_enemy_unlocks_air_production": flags["seen_enemy_has_airfield"],
+            "seen_enemy_unlocks_naval_production": flags["seen_enemy_has_naval_yard"],
+            "seen_enemy_unlocks_tier2": flags["seen_enemy_has_radar"]
+            or flags["seen_enemy_has_service_depot"]
+            or flags["seen_enemy_has_tech_center"],
+            "seen_enemy_unlocks_tier3": flags["seen_enemy_has_tech_center"],
+        }
+    )
+    return [int(flags[name]) for name in ENEMY_MEMORY_TECH_FLAG_NAMES]
+
+
+def _is_build_order_action_type_name(action_type_name: str | None) -> bool:
+    if not isinstance(action_type_name, str):
+        return False
+    if action_type_name.startswith("Queue::Add::"):
+        return True
+    if action_type_name.startswith("PlaceBuilding::"):
+        return True
+    if action_type_name.startswith("Order::Deploy::"):
+        return True
+    if action_type_name.startswith("Order::DeploySelected::"):
+        return True
+    return False
+
+
+def _should_collapse_build_order_duplicate(action_type_name: str | None) -> bool:
+    if not isinstance(action_type_name, str):
+        return False
+    return action_type_name.startswith("Order::Deploy::") or action_type_name.startswith("Order::DeploySelected::")
+
+
+def _build_order_trace_tensor(history: list[int]) -> list[int]:
+    trace = list(history[:BUILD_ORDER_TRACE_LEN])
+    if len(trace) < BUILD_ORDER_TRACE_LEN:
+        trace.extend([LABEL_LAYOUT_V1_MISSING_INT] * (BUILD_ORDER_TRACE_LEN - len(trace)))
+    return trace
+
+
 def augment_dataset_with_available_action_mask(dataset: dict[str, Any]) -> None:
     samples = dataset.get("samples", [])
     append_schema_section(
@@ -534,3 +981,304 @@ def augment_dataset_with_scalar_core_identity(dataset: dict[str, Any]) -> None:
             *sample["featureTensors"]["scalar"],
             *build_scalar_core_identity(sample, dataset),
         ]
+
+
+def augment_dataset_with_build_order_trace(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="buildOrderTrace",
+        shape=[BUILD_ORDER_TRACE_LEN],
+        dtype="int32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "buildOrderTrace",
+        }
+    )
+    feature_layout_v1["buildOrderTrace"] = {
+        "version": "v0_earliest_actions",
+        "shape": [BUILD_ORDER_TRACE_LEN],
+        "valueType": "static_action_type_id",
+        "missingValue": LABEL_LAYOUT_V1_MISSING_INT,
+        "contributingActionRules": [
+            "Queue::Add::*",
+            "PlaceBuilding::*",
+            "Order::Deploy::*",
+            "Order::DeploySelected::*",
+        ],
+        "semantics": "First N contributing self build/production action ids observed before the current action.",
+        "truncationPolicy": "keep_earliest_only",
+        "notes": [
+            "This is the RA2 V1 analogue to mAS beginning_build_order.",
+            "The trace is built on the full extracted action stream before SL downsampling, so dropped actions can still appear in later traces.",
+            "Only additive production/build actions contribute in V1; cancel/hold actions are excluded.",
+            "Consecutive duplicate deploy actions are collapsed to reduce opening spam from repeated deploy commands.",
+        ],
+    }
+
+    history_by_player: dict[str, list[int]] = {}
+    for sample in samples:
+        player_name = str(sample["playerName"])
+        history = history_by_player.setdefault(player_name, [])
+        sample["featureTensors"]["buildOrderTrace"] = _build_order_trace_tensor(history)
+
+        action_type_name = sample.get("derivedLabelMetadata", {}).get("actionTypeNameV1")
+        action_type_id = int(sample["labelTensors"]["actionTypeId"][0])
+        if not _is_build_order_action_type_name(action_type_name):
+            continue
+        if (
+            _should_collapse_build_order_duplicate(action_type_name)
+            and history
+            and history[-1] == action_type_id
+        ):
+            continue
+        if len(history) < BUILD_ORDER_TRACE_LEN:
+            history.append(action_type_id)
+
+
+def augment_dataset_with_tech_state(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="techState",
+        shape=[len(TECH_STATE_FLAG_NAMES)],
+        dtype="int32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "techState",
+        }
+    )
+    feature_layout_v1["techState"] = {
+        "version": "v0_owned_state",
+        "shape": [len(TECH_STATE_FLAG_NAMES)],
+        "featureNames": list(TECH_STATE_FLAG_NAMES),
+        "valueType": "binary_flag",
+        "rulesetAssumptions": {
+            "constructionYardNames": sorted(CONSTRUCTION_YARD_NAMES),
+            "powerBuildingNames": sorted(POWER_BUILDING_NAMES),
+            "barracksNames": sorted(BARRACKS_NAMES),
+            "refineryNames": sorted(REFINERY_NAMES),
+            "factoryNames": sorted(FACTORY_NAMES),
+            "airfieldNames": sorted(AIRFIELD_NAMES),
+            "navalYardNames": sorted(NAVAL_YARD_NAMES),
+            "radarNames": sorted(RADAR_NAMES),
+            "serviceDepotNames": sorted(SERVICE_DEPOT_NAMES),
+            "techCenterNames": sorted(TECH_CENTER_NAMES),
+        },
+        "notes": [
+            "This first pass uses current self-owned buildings plus scalar power state only.",
+            "It is a compact prerequisite and production-unlock summary, not an omniscient legality solver.",
+            "Special-tech flags are ownership flags; readiness and cooldown belong in a later superWeaponState section.",
+        ],
+    }
+
+    for sample in samples:
+        sample["featureTensors"]["techState"] = build_tech_state(sample, dataset)
+
+
+def augment_dataset_with_production_state(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="productionState",
+        shape=[len(PRODUCTION_STATE_FEATURE_NAMES)],
+        dtype="float32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "productionState",
+        }
+    )
+    feature_layout_v1["productionState"] = {
+        "version": "v0_queue_summary",
+        "shape": [len(PRODUCTION_STATE_FEATURE_NAMES)],
+        "featureNames": list(PRODUCTION_STATE_FEATURE_NAMES),
+        "queueTypeNames": list(PRODUCTION_QUEUE_TYPE_NAMES),
+        "queueStatusNames": list(PRODUCTION_QUEUE_STATUS_NAMES),
+        "nameTokenMissingValue": LABEL_LAYOUT_V1_MISSING_INT,
+        "notes": [
+            "This first pass summarizes self production queues from the internal production API only.",
+            "Per-queue features include queue/factory counts, coarse status flags, occupancy, and the first queued item summary.",
+            "Structure placement readiness is represented indirectly through the Structures queue Ready status.",
+            "Super-weapon charge and cooldown state remain separate future work in superWeaponState.",
+        ],
+    }
+
+    for sample in samples:
+        sample["featureTensors"]["productionState"] = build_production_state(sample, dataset)
+
+
+def augment_dataset_with_super_weapon_state(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="superWeaponState",
+        shape=[len(SUPER_WEAPON_STATE_FEATURE_NAMES)],
+        dtype="float32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "superWeaponState",
+        }
+    )
+    feature_layout_v1["superWeaponState"] = {
+        "version": "v0_generic_charge_summary",
+        "shape": [len(SUPER_WEAPON_STATE_FEATURE_NAMES)],
+        "featureNames": list(SUPER_WEAPON_STATE_FEATURE_NAMES),
+        "typeNames": list(SUPER_WEAPON_STATE_TYPE_NAMES),
+        "statusNames": list(SUPER_WEAPON_STATUS_NAMES),
+        "rechargeSecondsByType": dict((dataset.get("superWeaponSchema") or {}).get("rechargeSecondsByType") or {}),
+        "notes": [
+            "This first pass summarizes the acting player's generic super-weapon records only.",
+            "Per-type features include count, presence, status flags, and normalized charge progress in [0,1].",
+            "The generic API does not expose a separate availability field here, so readiness is represented by the Ready status flag rather than a distinct legality bit.",
+            "charge_progress_01 is computed against per-type nominal RechargeTime values exported from rules.ini.",
+        ],
+    }
+
+    for sample in samples:
+        sample["featureTensors"]["superWeaponState"] = build_super_weapon_state(sample, dataset)
+
+
+def augment_dataset_with_enemy_memory_bow(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="enemyMemoryBow",
+        shape=[len(OWNED_COMPOSITION_ROW_NAMES), len(OWNED_COMPOSITION_VOCABULARY)],
+        dtype="int32",
+    )
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="enemyMemoryTechFlags",
+        shape=[len(ENEMY_MEMORY_TECH_FLAG_NAMES)],
+        dtype="int32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "enemyMemoryBow",
+        }
+    )
+    feature_layout_v1["enemyMemoryBow"] = {
+        "version": "v0_monotonic_max_visible",
+        "shape": [len(OWNED_COMPOSITION_ROW_NAMES), len(OWNED_COMPOSITION_VOCABULARY)],
+        "rowNames": list(OWNED_COMPOSITION_ROW_NAMES),
+        "vocabulary": {
+            "idToName": list(OWNED_COMPOSITION_VOCABULARY),
+            "nameToId": dict(OWNED_COMPOSITION_NAME_TO_ID),
+            "unknownName": OWNED_COMPOSITION_UNKNOWN_NAME,
+        },
+        "countSemantics": "max_visible_count_so_far",
+        "techFlagsShape": [len(ENEMY_MEMORY_TECH_FLAG_NAMES)],
+        "techFlagNames": list(ENEMY_MEMORY_TECH_FLAG_NAMES),
+        "notes": [
+            "Enemy memory is accumulated per player perspective using only currently visible enemy entities from the safe observation tensor.",
+            "The count rows store monotonic max-visible counts by static name bucket, so they never decrease across samples for a player.",
+            "Enemy tech flags are derived from seen enemy building names only and never backfilled from global hidden state.",
+        ],
+    }
+
+    memory_by_player: dict[str, dict[str, Any]] = {}
+    for sample in samples:
+        player_name = str(sample["playerName"])
+        player_memory = memory_by_player.setdefault(
+            player_name,
+            {
+                "unitCounts": [0] * len(OWNED_COMPOSITION_VOCABULARY),
+                "buildingCounts": [0] * len(OWNED_COMPOSITION_VOCABULARY),
+                "seenBuildingNames": set(),
+            },
+        )
+
+        current_unit_counts = [0] * len(OWNED_COMPOSITION_VOCABULARY)
+        current_building_counts = [0] * len(OWNED_COMPOSITION_VOCABULARY)
+        for entity in _collect_enemy_entities(sample, dataset):
+            name = _normalize_owned_object_name(entity["name"])
+            bucket = OWNED_COMPOSITION_NAME_TO_ID.get(name, 0)
+            if entity["isBuilding"]:
+                current_building_counts[bucket] += 1
+                if name != OWNED_COMPOSITION_UNKNOWN_NAME:
+                    player_memory["seenBuildingNames"].add(name)
+            else:
+                current_unit_counts[bucket] += 1
+
+        for bucket, count in enumerate(current_unit_counts):
+            if count > player_memory["unitCounts"][bucket]:
+                player_memory["unitCounts"][bucket] = count
+        for bucket, count in enumerate(current_building_counts):
+            if count > player_memory["buildingCounts"][bucket]:
+                player_memory["buildingCounts"][bucket] = count
+
+        sample["featureTensors"]["enemyMemoryBow"] = [
+            list(player_memory["unitCounts"]),
+            list(player_memory["buildingCounts"]),
+        ]
+        sample["featureTensors"]["enemyMemoryTechFlags"] = build_enemy_memory_tech_flags(
+            set(player_memory["seenBuildingNames"])
+        )
+
+
+def augment_dataset_with_map_static(dataset: dict[str, Any]) -> None:
+    static_map_by_player = dataset.get("staticMapByPlayer", {})
+    if not static_map_by_player:
+        raise KeyError("Dataset is missing staticMapByPlayer required for mapStatic.")
+
+    first_static_map = next(iter(static_map_by_player.values()))
+    channel_names = list(first_static_map.get("channelNames", []))
+    height = int(first_static_map.get("height", 0))
+    width = int(first_static_map.get("width", 0))
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="mapStatic",
+        shape=[len(channel_names), height, width],
+        dtype="float32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    feature_layout_v1 = dataset.setdefault("featureLayoutV1", build_feature_layout_v1_contract())
+    feature_layout_v1["implementedSections"] = sorted(
+        {
+            *feature_layout_v1.get("implementedSections", []),
+            "mapStatic.core",
+        }
+    )
+    feature_layout_v1["mapStatic"] = {
+        "version": "v0_compact_static_planes",
+        "representationPolicy": "separate_branch",
+        "shape": [len(channel_names), height, width],
+        "channelNames": channel_names,
+        "notes": [
+            "mapStatic is replay-constant and player-constant over a shard; the same planes are attached to each sample for that player.",
+            "The first pass stores compact static priors for passability, buildability, normalized height, and all start locations.",
+            "Buildability is a side-specific reference-building prior with adjacency checks disabled, not a dynamic legality mask.",
+        ],
+    }
+
+    for sample in dataset.get("samples", []):
+        player_name = str(sample["playerName"])
+        static_map = static_map_by_player.get(player_name)
+        if static_map is None:
+            raise KeyError(f"Static map features missing for player: {player_name}")
+        sample["featureTensors"]["mapStatic"] = static_map["data"]

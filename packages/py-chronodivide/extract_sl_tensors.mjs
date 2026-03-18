@@ -51,6 +51,9 @@ async function writeDatasetJson(outputPath, result) {
       ["sampledPlayers", result.sampledPlayers],
       ["options", result.options],
       ["schema", result.schema],
+      ["superWeaponSchema", result.superWeaponSchema],
+      ["staticMapSchema", result.staticMapSchema],
+      ["staticMapByPlayer", result.staticMapByPlayer],
       ["counts", result.counts],
     ];
 

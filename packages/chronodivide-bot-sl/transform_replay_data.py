@@ -64,8 +64,14 @@ from transform_lib.filtering import (
 )
 from transform_lib.feature_layout import (
     augment_dataset_with_available_action_mask,
+    augment_dataset_with_build_order_trace,
+    augment_dataset_with_enemy_memory_bow,
+    augment_dataset_with_map_static,
     augment_dataset_with_owned_composition_bow,
+    augment_dataset_with_production_state,
     augment_dataset_with_scalar_core_identity,
+    augment_dataset_with_super_weapon_state,
+    augment_dataset_with_tech_state,
 )
 from transform_lib.schema_utils import (
     build_sample_context_tensors,
@@ -238,6 +244,12 @@ def write_player_shard(
         "featureLayoutV1": dataset.get("featureLayoutV1"),
         "featureContextV1": dataset.get("featureContextV1"),
         "labelLayoutV1": dataset.get("labelLayoutV1"),
+        "staticMapPlayerMetadata": {
+            "buildabilityReferenceName": dataset.get("staticMapByPlayer", {}).get(player_name, {}).get(
+                "buildabilityReferenceName"
+            ),
+            "channelNames": dataset.get("staticMapSchema", {}).get("staticMapChannelNames"),
+        },
         "tensorPath": str(tensor_path),
         "structuredTensorPath": str(structured_tensor_path),
     }
@@ -268,6 +280,12 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
     augment_dataset_with_scalar_core_identity(dataset)
     augment_dataset_with_available_action_mask(dataset)
     augment_dataset_with_owned_composition_bow(dataset)
+    augment_dataset_with_build_order_trace(dataset)
+    augment_dataset_with_tech_state(dataset)
+    augment_dataset_with_production_state(dataset)
+    augment_dataset_with_super_weapon_state(dataset)
+    augment_dataset_with_enemy_memory_bow(dataset)
+    augment_dataset_with_map_static(dataset)
     dataset["filterConfig"] = build_filter_config(config)
     grouped_samples = group_samples_by_player(dataset.get("samples", []))
     if not grouped_samples:

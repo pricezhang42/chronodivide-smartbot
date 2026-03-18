@@ -200,7 +200,7 @@ function queueToPlain(queue) {
   };
 }
 
-function productionToPlain(production) {
+export function productionToPlain(production) {
   if (!production) {
     return undefined;
   }
@@ -215,6 +215,23 @@ function productionToPlain(production) {
           count: safeNumber(count, 0),
         }))
       : [];
+  const availableCountsByQueueType =
+    typeof production.getAvailableObjects === "function"
+      ? Object.keys(QUEUE_TYPE_NAMES).map((queueType) => {
+          const numericQueueType = Number(queueType);
+          let availableObjects = [];
+          try {
+            availableObjects = production.getAvailableObjects(numericQueueType) ?? [];
+          } catch {
+            availableObjects = [];
+          }
+          return {
+            queueType: numericQueueType,
+            queueTypeName: QUEUE_TYPE_NAMES[numericQueueType] ?? `QueueType_${numericQueueType}`,
+            count: Array.isArray(availableObjects) ? availableObjects.length : 0,
+          };
+        })
+      : [];
 
   return {
     maxTechLevel: safeNumber(production.maxTechLevel),
@@ -222,6 +239,7 @@ function productionToPlain(production) {
     queueCount: queueSummaries.length,
     queues: queueSummaries,
     factoryCounts,
+    availableCountsByQueueType,
     availableObjectCount: Array.isArray(production.allAvailableObjects) ? production.allAvailableObjects.length : 0,
     availableObjects:
       Array.isArray(production.allAvailableObjects)
@@ -268,7 +286,7 @@ function weaponToPlain(weapon) {
   };
 }
 
-function superWeaponToPlain(superWeapon) {
+export function superWeaponToPlain(superWeapon) {
   if (!superWeapon) {
     return undefined;
   }

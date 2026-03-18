@@ -201,6 +201,41 @@ V1 policy:
 - derived only from observation history up to the current tick
 - never from global enemy state
 
+Current V1 policy:
+
+- store monotonic enemy-memory counts over the same static name vocabulary used by `ownedCompositionBow`
+- keep two count rows:
+  - `seenEnemyUnitCountBow`
+  - `seenEnemyBuildingCountBow`
+- store a companion `enemyMemoryTechFlags` section for seen enemy tech and branch unlocks
+- update memory only from currently visible enemy entities in the safe observation tensor
+- use monotonic `max_visible_count_so_far` semantics for the count rows
+- derive tech flags only from seen enemy building names
+- never backfill from global enemy player state or hidden units
+
+First-pass seen-tech flags include:
+
+- construction yard
+- power
+- barracks
+- refinery
+- factory
+- airfield
+- naval yard
+- radar
+- service depot
+- tech center
+- ore purifier
+- gap generator
+- cloning vat
+- psychic sensor
+- nuclear silo
+- iron curtain
+- weather control
+- chronosphere
+- infantry / vehicle / air / naval production unlock summaries
+- tier-2 and tier-3 unlock summaries
+
 Why:
 
 - this is the RA2 equivalent of enemy-upgrade and enemy-tech strategic context
@@ -219,6 +254,18 @@ Recommended contents:
 - use the same static action dict ids where reasonable
 - pad with `-1`
 
+Current V1 policy:
+
+- `BUILD_ORDER_TRACE_LEN = 20`
+- store the trace as static V1 `actionTypeId` values
+- contributing action types are:
+  - `Queue::Add::*`
+  - `PlaceBuilding::*`
+  - `Order::Deploy::*`
+  - `Order::DeploySelected::*`
+- the feature at timestep `t` contains only contributing actions seen before the current action
+- once the trace is full, keep the earliest events only
+
 Why:
 
 - this is the RA2 analogue to mAS `beginning_build_order`
@@ -234,6 +281,34 @@ Suggested contents:
 - unlocked production-category flags
 - unlocked special-tech flags
 - power-satisfied-for-tech flags
+
+Current V1 policy:
+
+- store `techState` as a binary flag vector
+- derive it from current self-owned buildings and current power state only
+- include first-pass flags for:
+  - construction yard
+  - power
+  - barracks
+  - refinery
+  - factory
+  - airfield
+  - naval yard
+  - radar
+  - service depot
+  - tech center
+  - ore purifier
+  - gap generator
+  - cloning vat
+  - psychic sensor
+  - nuclear silo
+  - iron curtain
+  - weather control
+  - chronosphere
+  - infantry / vehicle / air / naval production unlocks
+  - tier-2 and tier-3 unlock summaries
+  - `power_low`
+  - `power_satisfied`
 
 Why:
 
@@ -252,6 +327,41 @@ Suggested contents:
 - queue occupancy / queued-count summaries
 - construction-yard placement mode summary
 - current rally summary for factories if available
+
+Current V1 policy:
+
+- store `productionState` as one compact feature vector of length `100`
+- derive it from the acting player's internal production API only
+- include these global fields:
+  - `maxTechLevel`
+  - `buildSpeedModifier`
+  - `queueCount`
+  - `availableObjectCount`
+- summarize these queue types:
+  - `Structures`
+  - `Armory`
+  - `Infantry`
+  - `Vehicles`
+  - `Aircrafts`
+  - `Ships`
+- for each queue type, include:
+  - `factory_count`
+  - `available_count`
+  - `has_queue`
+  - status one-hot flags for `Idle / Active / OnHold / Ready`
+  - `size`
+  - `max_size`
+  - `max_item_quantity`
+  - `has_items`
+  - `total_item_quantity`
+  - `first_item_name_token`
+  - `first_item_quantity`
+  - `first_item_progress`
+  - `first_item_cost`
+- use `sharedNameVocabulary` ids for `first_item_name_token`
+- use `-1` for missing first-item tokens
+- interpret `Structures` queue `Ready` as the first-pass construction-yard placement-ready signal
+- keep super-weapon charge and cooldown out of this block; that belongs in `superWeaponState`
 
 Why:
 
@@ -273,6 +383,40 @@ Suggested contents:
 Why:
 
 - this is strategically important and currently absent from features
+
+Current V1 policy:
+
+- store `superWeaponState` as one compact feature vector of length `47`
+- derive it from the acting player's generic `playerSuperWeapons` records only
+- include these global fields:
+  - `super_weapon_count`
+  - `super_weapon_unknown_type_count`
+  - `super_weapon_charging_count`
+  - `super_weapon_paused_count`
+  - `super_weapon_ready_count`
+- summarize these generic super-weapon types:
+  - `MultiMissile`
+  - `IronCurtain`
+  - `LightningStorm`
+  - `ChronoSphere`
+  - `ChronoWarp`
+  - `ParaDrop`
+  - `AmerParaDrop`
+- for each type, include:
+  - `count`
+  - `has`
+  - status flags for `Charging / Paused / Ready`
+  - `charge_progress_01`
+- use the generic `Ready` status as the first-pass readiness / availability signal
+- normalize progress against the per-type nominal `RechargeTime` from `rules.ini`
+- treat `RechargeTime` as minutes from the rules file and convert it to seconds before comparing against replay `timerSeconds`
+- keep unknown generic types out of the per-type slices and count them only in `super_weapon_unknown_type_count`
+
+Validation snapshot:
+
+- full replay validation on `00758dde-b725-4442-ae8f-a657069251a0.rpl` produced nonzero `superWeaponState` for both players
+- first live vectors showed `ParaDrop` in `Charging` state with normalized progress near `0.003-0.025`
+- later samples in the same replay also reached `Ready` for `ParaDrop`, and `bikerush` additionally reached nonzero `AmerParaDrop`
 
 ### 11. `entity`
 
@@ -366,6 +510,31 @@ This can be represented either as:
 - extra scalar/static metadata
 - extra spatial channels
 - or both
+
+Current V1 policy:
+
+- represent `mapStatic` as a separate replay-constant spatial branch
+- store it at the main spatial resolution, currently `32 x 32`
+- keep the first-pass channels:
+  - `foot_passable`
+  - `track_passable`
+  - `buildable_reference`
+  - `terrain_height_norm`
+  - `start_locations`
+- compute passability as the fraction of source tiles in each grid cell that are passable for the given speed type
+- compute `buildable_reference` with engine placement checks using:
+  - side-specific small power-plant references
+  - `ignoreAdjacent = true`
+- interpret `buildable_reference` as a conservative static placement prior, not a dynamic legality mask
+- keep `start_locations` as a multi-start plane, not just the acting player's spawn
+- keep this branch replay-constant and player-constant within a shard
+
+Current first-pass reference buildings:
+
+- GDI side: `GAPOWR`
+- Nod side: `NAPOWR`
+- ThirdSide / Yuri side: `YAPOWR`
+- fallback: `GAPOWR`
 
 The closest SC2 analogue is `StartRaw` in [raw.proto](D:/workspace/s2client-proto/s2clientprotocol/raw.proto).
 

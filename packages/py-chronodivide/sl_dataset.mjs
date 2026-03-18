@@ -1,4 +1,4 @@
-import { extractObservationFeatureSample, getObservationFeatureSchema } from "./features.mjs";
+import { extractObservationFeatureSample, extractStaticMapFeatureSample, getObservationFeatureSchema, getStaticMapFeatureSchema } from "./features.mjs";
 import {
   buildActionTimelines,
   decodeActionLabel,
@@ -7,11 +7,26 @@ import {
   updateSelectionFromAction,
 } from "./labels.mjs";
 import { buildReplayMetadata, createReplayResimContext } from "./resim_core.mjs";
+import { productionToPlain, superWeaponToPlain } from "./snapshot.mjs";
 
 const DEFAULT_LAST_ACTION_RAW_ID = -1;
 const DEFAULT_LAST_ACTION_FAMILY_ID = -1;
 const DEFAULT_LAST_ACTION_QUEUE = -1;
 const DEFAULT_MISSING_INT = -1;
+const STATIC_MAP_BUILDING_BY_SIDE_ID = {
+  0: "GAPOWR",
+  1: "NAPOWR",
+  2: "YAPOWR",
+};
+const SUPER_WEAPON_RULE_SECTION_BY_TYPE_NAME = {
+  MultiMissile: "MultiSpecial",
+  IronCurtain: "IronCurtainSpecial",
+  LightningStorm: "LightningStormSpecial",
+  ChronoSphere: "ChronoSphereSpecial",
+  ChronoWarp: "ChronoWarpSpecial",
+  ParaDrop: "ParaDropSpecial",
+  AmerParaDrop: "AmericanParaDropSpecial",
+};
 
 function numericOrDefault(value, fallback = 0) {
   return Number.isFinite(value) ? Number(value) : fallback;
@@ -22,6 +37,51 @@ function boolToInt(value, fallback = DEFAULT_MISSING_INT) {
     return fallback;
   }
   return value ? 1 : 0;
+}
+
+function getStaticMapReferenceBuildingName(replayMetadata, playerName) {
+  const replayPlayer = replayMetadata.players.find((player) => player.name === playerName);
+  const sideId = replayPlayer?.sideId;
+  if (sideId in STATIC_MAP_BUILDING_BY_SIDE_ID) {
+    return STATIC_MAP_BUILDING_BY_SIDE_ID[sideId];
+  }
+  return "GAPOWR";
+}
+
+function buildSuperWeaponSchema(gameApi) {
+  const rulesIni = gameApi?.getRulesIni?.();
+  const typeNames = Object.keys(SUPER_WEAPON_RULE_SECTION_BY_TYPE_NAME);
+  const rechargeRulesMinutesByType = {};
+  const rechargeSecondsByType = {};
+  const rulesSectionByType = {};
+
+  for (const typeName of typeNames) {
+    const sectionName = SUPER_WEAPON_RULE_SECTION_BY_TYPE_NAME[typeName];
+    rulesSectionByType[typeName] = sectionName;
+    let rechargeSeconds = null;
+
+    if (rulesIni?.getSection) {
+      const section = rulesIni.getSection(sectionName);
+      const rawRechargeTime = section?.entries?.get?.("RechargeTime");
+      const numericRechargeTime = rawRechargeTime === undefined ? Number.NaN : Number(rawRechargeTime);
+      if (Number.isFinite(numericRechargeTime)) {
+        rechargeSeconds = numericRechargeTime * 60.0;
+        rechargeRulesMinutesByType[typeName] = numericRechargeTime;
+      }
+    }
+
+    if (!(typeName in rechargeRulesMinutesByType)) {
+      rechargeRulesMinutesByType[typeName] = null;
+    }
+    rechargeSecondsByType[typeName] = rechargeSeconds;
+  }
+
+  return {
+    typeNames,
+    rulesSectionByType,
+    rechargeRulesMinutesByType,
+    rechargeSecondsByType,
+  };
 }
 
 function tileToTensor(tile) {
@@ -91,6 +151,20 @@ function buildNameVocabulary(rawSamples) {
     for (const candidate of candidates) {
       if (candidate) {
         names.add(candidate);
+      }
+    }
+
+    for (const queue of sample.playerProduction?.queues ?? []) {
+      for (const item of queue?.items ?? []) {
+        if (item?.objectName) {
+          names.add(item.objectName);
+        }
+      }
+    }
+
+    for (const availableObject of sample.playerProduction?.availableObjects ?? []) {
+      if (availableObject?.name) {
+        names.add(availableObject.name);
       }
     }
   }
@@ -380,6 +454,9 @@ function buildTensorSchema(options, nameVocabulary) {
       "Current-selection tensors are inferred from the replay command stream before the current action is processed.",
       "Entity-relative selections and targets use indices into the current visible entity tensor and fall back to -1 when unresolved.",
       "Name vocabularies are built per extraction run for now; later dataset-wide passes should stabilize them.",
+      "Per-sample playerProduction is carried through as a generic raw production summary for downstream feature builders.",
+      "Per-sample playerSuperWeapons is carried through as a generic raw support-power summary for downstream feature builders.",
+      "superWeaponSchema carries nominal recharge seconds from rules.ini so downstream feature builders can normalize super-weapon timers by type.",
       "JSON output contains numeric arrays that are tensor-ready but not framework-native .pt/.npz files.",
     ],
   };
@@ -392,6 +469,8 @@ function buildTensorSample(rawSample, nameVocabulary, options, includeFlat, incl
     tick: rawSample.tick,
     playerId: rawSample.playerId,
     playerName: rawSample.playerName,
+    playerProduction: rawSample.playerProduction ?? null,
+    playerSuperWeapons: rawSample.playerSuperWeapons ?? [],
     featureTensors,
     labelTensors,
   };
@@ -454,6 +533,7 @@ export async function extractReplaySupervisedDataset({
     dataDir,
     replayPath,
   });
+  const replayMetadata = buildReplayMetadata(context);
   const sampledPlayers = inferSampledPlayers(context, player);
   if (!sampledPlayers.length) {
     throw new Error("Could not infer a player for supervised dataset extraction.");
@@ -486,6 +566,8 @@ export async function extractReplaySupervisedDataset({
     const tickEvents = context.replayEventsByTick.get(currentTick) ?? [];
     const stagedActions = [];
     const featureCache = new Map();
+    const productionCache = new Map();
+    const superWeaponCache = new Map();
 
     for (const event of tickEvents) {
       if (event.constructor.name !== "TurnActionsReplayEvent") {
@@ -523,6 +605,20 @@ export async function extractReplaySupervisedDataset({
                 }),
               );
             }
+            if (!productionCache.has(playerName)) {
+              const internalPlayer = context.internalGame.getPlayerByName
+                ? context.internalGame.getPlayerByName(playerName)
+                : null;
+              productionCache.set(playerName, productionToPlain(internalPlayer?.production));
+            }
+            if (!superWeaponCache.has(playerName)) {
+              const playerSuperWeapons = context.gameApi
+                .getAllSuperWeaponData()
+                .filter((superWeapon) => superWeapon.playerName === playerName)
+                .map(superWeaponToPlain)
+                .filter(Boolean);
+              superWeaponCache.set(playerName, playerSuperWeapons);
+            }
 
             const timeline = timelines.get(playerName) ?? [];
             const cursor = timelineCursors.get(playerName) ?? 0;
@@ -544,6 +640,8 @@ export async function extractReplaySupervisedDataset({
               playerId,
               playerName,
               feature: featureCache.get(playerName),
+              playerProduction: productionCache.get(playerName) ?? null,
+              playerSuperWeapons: superWeaponCache.get(playerName) ?? [],
               selectionBeforeActionIds: selectionBeforeActionIds.slice(),
               selectionAfterActionIds: selectionAfterActionIds.slice(),
               label,
@@ -581,12 +679,23 @@ export async function extractReplaySupervisedDataset({
     spatialSize,
     minimapSize,
   };
+  const superWeaponSchema = buildSuperWeaponSchema(context.gameApi);
+  const staticMapByPlayer = Object.fromEntries(
+    sampledPlayers.map((playerName) => [
+      playerName,
+      extractStaticMapFeatureSample(context.gameApi, {
+        playerName,
+        spatialSize,
+        buildabilityReferenceName: getStaticMapReferenceBuildingName(replayMetadata, playerName),
+      }),
+    ]),
+  );
   const samples = rawSamples.map((rawSample) =>
     buildTensorSample(rawSample, sharedNameVocabulary, options, includeFlat, includeDebug),
   );
 
   return {
-    replay: buildReplayMetadata(context),
+    replay: replayMetadata,
     sampledPlayers,
     options: {
       includeNoAction,
@@ -601,6 +710,9 @@ export async function extractReplaySupervisedDataset({
       includeDebug,
     },
     schema: buildTensorSchema(options, sharedNameVocabulary),
+    superWeaponSchema,
+    staticMapByPlayer,
+    staticMapSchema: getStaticMapFeatureSchema({ spatialSize }),
     counts: buildActionCounts(rawSamples),
     samples,
   };
