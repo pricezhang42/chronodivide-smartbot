@@ -263,12 +263,48 @@ class RA2SLSectionDataset(Dataset[dict[str, Any]]):
                 self._loaded_shards.popitem(last=False)
         return loaded
 
-    def __getitem__(self, index: int) -> dict[str, Any]:
-        shard_index, local_index = self._locate_index(index)
-        record = self.shard_records[shard_index]
-        loaded = self._load_shard(shard_index)
+    def _build_metadata(
+        self,
+        *,
+        record: ModelShardRecord,
+        shard_index: int,
+        global_index: int | None,
+        local_index: int | None = None,
+        window_start_local_index: int | None = None,
+        window_size: int | None = None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "global_index": global_index,
+            "local_index": local_index,
+            "shard_index": shard_index,
+            "shard_stem": record.stem,
+            "meta_path": str(record.meta_path),
+            "sections_path": str(record.sections_path),
+            "training_path": str(record.training_path),
+            "replay_path": record.replay_path,
+            "replay_game_id": record.replay_game_id,
+            "map_name": record.map_name,
+            "player_name": record.player_name,
+            "player_country_name": record.player_country_name,
+            "player_side_id": record.player_side_id,
+            "sample_count": record.sample_count,
+        }
+        if window_start_local_index is not None and window_size is not None:
+            metadata["window_start_local_index"] = window_start_local_index
+            metadata["window_end_local_index"] = window_start_local_index + window_size - 1
+            metadata["window_size"] = window_size
+        return metadata
 
-        sample = {
+    def _build_single_sample(
+        self,
+        *,
+        record: ModelShardRecord,
+        loaded: _LoadedShard,
+        shard_index: int,
+        local_index: int,
+        global_index: int,
+    ) -> dict[str, Any]:
+        return {
             "feature_sections": {
                 name: tensor[local_index]
                 for name, tensor in loaded.feature_sections.items()
@@ -289,21 +325,115 @@ class RA2SLSectionDataset(Dataset[dict[str, Any]]):
                 name: tensor[local_index]
                 for name, tensor in loaded.sample_context.items()
             },
-            "metadata": {
-                "global_index": index,
-                "local_index": local_index,
-                "shard_index": shard_index,
-                "shard_stem": record.stem,
-                "meta_path": str(record.meta_path),
-                "sections_path": str(record.sections_path),
-                "training_path": str(record.training_path),
-                "replay_path": record.replay_path,
-                "replay_game_id": record.replay_game_id,
-                "map_name": record.map_name,
-                "player_name": record.player_name,
-                "player_country_name": record.player_country_name,
-                "player_side_id": record.player_side_id,
-                "sample_count": record.sample_count,
-            },
+            "metadata": self._build_metadata(
+                record=record,
+                shard_index=shard_index,
+                global_index=global_index,
+                local_index=local_index,
+            ),
         }
-        return sample
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        shard_index, local_index = self._locate_index(index)
+        record = self.shard_records[shard_index]
+        loaded = self._load_shard(shard_index)
+        return self._build_single_sample(
+            record=record,
+            loaded=loaded,
+            shard_index=shard_index,
+            local_index=local_index,
+            global_index=index,
+        )
+
+
+class RA2SLSequenceWindowDataset(RA2SLSectionDataset):
+    def __init__(
+        self,
+        shard_records: list[ModelShardRecord],
+        *,
+        window_size: int,
+        window_stride: int = 1,
+        cache_size: int | None = 2,
+    ) -> None:
+        if window_size <= 0:
+            raise ValueError(f"window_size must be positive, got {window_size}.")
+        if window_stride <= 0:
+            raise ValueError(f"window_stride must be positive, got {window_stride}.")
+        super().__init__(shard_records, cache_size=cache_size)
+        self.window_size = int(window_size)
+        self.window_stride = int(window_stride)
+        self._window_index: list[tuple[int, int]] = []
+        for shard_index, record in enumerate(self.shard_records):
+            sample_count = int(record.sample_count)
+            if sample_count < self.window_size:
+                continue
+            max_start = sample_count - self.window_size
+            for start in range(0, max_start + 1, self.window_stride):
+                self._window_index.append((shard_index, start))
+        if not self._window_index:
+            raise ValueError(
+                "RA2SLSequenceWindowDataset found no valid windows. "
+                f"window_size={self.window_size} may be too large for the selected shards."
+            )
+
+    @classmethod
+    def from_directory(
+        cls,
+        root_dir: Path,
+        *,
+        window_size: int,
+        window_stride: int = 1,
+        shard_filter: ModelShardFilter | None = None,
+        cache_size: int | None = 2,
+    ) -> "RA2SLSequenceWindowDataset":
+        records = discover_model_shards(root_dir, shard_filter=shard_filter)
+        return cls(
+            records,
+            window_size=window_size,
+            window_stride=window_stride,
+            cache_size=cache_size,
+        )
+
+    def __len__(self) -> int:
+        return len(self._window_index)
+
+    def __getitem__(self, index: int) -> dict[str, Any]:
+        if index < 0:
+            index += len(self)
+        if index < 0 or index >= len(self):
+            raise IndexError(f"Sequence window index out of range: {index}")
+
+        shard_index, window_start = self._window_index[index]
+        record = self.shard_records[shard_index]
+        loaded = self._load_shard(shard_index)
+        window_end = window_start + self.window_size
+
+        return {
+            "feature_sections": {
+                name: tensor[window_start:window_end]
+                for name, tensor in loaded.feature_sections.items()
+            },
+            "label_sections": {
+                name: tensor[window_start:window_end]
+                for name, tensor in loaded.label_sections.items()
+            },
+            "training_targets": {
+                name: tensor[window_start:window_end]
+                for name, tensor in loaded.training_targets.items()
+            },
+            "training_masks": {
+                name: tensor[window_start:window_end]
+                for name, tensor in loaded.training_masks.items()
+            },
+            "sample_context": {
+                name: tensor[window_start:window_end]
+                for name, tensor in loaded.sample_context.items()
+            },
+            "metadata": self._build_metadata(
+                record=record,
+                shard_index=shard_index,
+                global_index=index,
+                window_start_local_index=window_start,
+                window_size=self.window_size,
+            ),
+        }

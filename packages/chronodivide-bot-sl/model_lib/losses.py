@@ -17,6 +17,19 @@ def _one_hot_to_index(one_hot: torch.Tensor) -> torch.Tensor:
     return torch.argmax(one_hot.to(torch.float32), dim=-1)
 
 
+def _flatten_logits_and_targets(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    mask: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    class_count = int(logits.shape[-1])
+    return (
+        logits.reshape(-1, class_count),
+        targets.reshape(-1),
+        mask.reshape(-1),
+    )
+
+
 def _masked_classification_loss(
     logits: torch.Tensor,
     targets: torch.Tensor,
@@ -35,26 +48,29 @@ def _masked_accuracy(logits: torch.Tensor, targets: torch.Tensor, mask: torch.Te
 
 
 def _masked_spatial_loss(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    flat_logits = logits.reshape(logits.shape[0], -1)
-    flat_targets = _one_hot_to_index(target_one_hot.reshape(target_one_hot.shape[0], -1))
-    return _masked_classification_loss(flat_logits, flat_targets, mask)
+    flat_logits = logits.reshape(-1, logits.shape[-2] * logits.shape[-1])
+    flat_targets = _one_hot_to_index(target_one_hot.reshape(-1, target_one_hot.shape[-2] * target_one_hot.shape[-1]))
+    return _masked_classification_loss(flat_logits, flat_targets, mask.reshape(-1))
 
 
 def _masked_spatial_accuracy(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    flat_logits = logits.reshape(logits.shape[0], -1)
-    flat_targets = _one_hot_to_index(target_one_hot.reshape(target_one_hot.shape[0], -1))
-    return _masked_accuracy(flat_logits, flat_targets, mask)
+    flat_logits = logits.reshape(-1, logits.shape[-2] * logits.shape[-1])
+    flat_targets = _one_hot_to_index(target_one_hot.reshape(-1, target_one_hot.shape[-2] * target_one_hot.shape[-1]))
+    return _masked_accuracy(flat_logits, flat_targets, mask.reshape(-1))
 
 
 def _masked_quantity_loss(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    value_loss = F.smooth_l1_loss(pred.squeeze(-1), target.to(torch.float32).squeeze(-1), reduction="none")
-    return _masked_mean(value_loss, mask)
+    flat_pred = pred.squeeze(-1).reshape(-1)
+    flat_target = target.to(torch.float32).squeeze(-1).reshape(-1)
+    value_loss = F.smooth_l1_loss(flat_pred, flat_target, reduction="none")
+    return _masked_mean(value_loss, mask.reshape(-1))
 
 
 def _masked_quantity_accuracy(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    rounded_pred = torch.round(pred.squeeze(-1))
-    correct = (rounded_pred == target.to(torch.float32).squeeze(-1)).to(torch.float32)
-    return _masked_mean(correct, mask)
+    rounded_pred = torch.round(pred.squeeze(-1).reshape(-1))
+    flat_target = target.to(torch.float32).squeeze(-1).reshape(-1)
+    correct = (rounded_pred == flat_target).to(torch.float32)
+    return _masked_mean(correct, mask.reshape(-1))
 
 
 @dataclass
@@ -88,24 +104,44 @@ def compute_ra2_sl_loss(
     target_location2_mask = masks["targetLocation2LossMask"].squeeze(-1) > 0
     quantity_mask = masks["quantityLossMask"].squeeze(-1) > 0
 
-    action_type_loss = _masked_classification_loss(
+    flat_action_type_logits, flat_action_type_targets, flat_action_type_mask = _flatten_logits_and_targets(
         outputs["actionTypeLogits"],
         action_type_targets,
         action_type_mask,
+    )
+    flat_delay_logits, flat_delay_targets, flat_delay_mask = _flatten_logits_and_targets(
+        outputs["delayLogits"],
+        delay_targets,
+        delay_mask,
+    )
+    flat_queue_logits, flat_queue_targets, flat_queue_mask = _flatten_logits_and_targets(
+        outputs["queueLogits"],
+        queue_targets,
+        queue_mask,
+    )
+    action_type_loss = _masked_classification_loss(
+        flat_action_type_logits,
+        flat_action_type_targets,
+        flat_action_type_mask,
         class_weights=action_type_class_weights,
     )
-    delay_loss = _masked_classification_loss(outputs["delayLogits"], delay_targets, delay_mask)
-    queue_loss = _masked_classification_loss(outputs["queueLogits"], queue_targets, queue_mask)
+    delay_loss = _masked_classification_loss(flat_delay_logits, flat_delay_targets, flat_delay_mask)
+    queue_loss = _masked_classification_loss(flat_queue_logits, flat_queue_targets, flat_queue_mask)
 
     units_logits = outputs["unitsLogits"].reshape(-1, outputs["unitsLogits"].shape[-1])
     units_target_flat = units_targets.reshape(-1)
     units_mask_flat = units_mask.reshape(-1)
     units_loss = _masked_classification_loss(units_logits, units_target_flat, units_mask_flat)
 
-    target_entity_loss = _masked_classification_loss(
+    flat_target_entity_logits, flat_target_entity_targets, flat_target_entity_mask = _flatten_logits_and_targets(
         outputs["targetEntityLogits"],
         target_entity_targets,
         target_entity_mask,
+    )
+    target_entity_loss = _masked_classification_loss(
+        flat_target_entity_logits,
+        flat_target_entity_targets,
+        flat_target_entity_mask,
     )
     target_location_loss = _masked_spatial_loss(
         outputs["targetLocationLogits"],
@@ -132,14 +168,14 @@ def compute_ra2_sl_loss(
     total_loss = sum(loss_by_head.values())
 
     metrics = {
-        "actionTypeAccuracy": _masked_accuracy(outputs["actionTypeLogits"], action_type_targets, action_type_mask),
-        "delayAccuracy": _masked_accuracy(outputs["delayLogits"], delay_targets, delay_mask),
-        "queueAccuracy": _masked_accuracy(outputs["queueLogits"], queue_targets, queue_mask),
+        "actionTypeAccuracy": _masked_accuracy(flat_action_type_logits, flat_action_type_targets, flat_action_type_mask),
+        "delayAccuracy": _masked_accuracy(flat_delay_logits, flat_delay_targets, flat_delay_mask),
+        "queueAccuracy": _masked_accuracy(flat_queue_logits, flat_queue_targets, flat_queue_mask),
         "unitsAccuracy": _masked_accuracy(units_logits, units_target_flat, units_mask_flat),
         "targetEntityAccuracy": _masked_accuracy(
-            outputs["targetEntityLogits"],
-            target_entity_targets,
-            target_entity_mask,
+            flat_target_entity_logits,
+            flat_target_entity_targets,
+            flat_target_entity_mask,
         ),
         "targetLocationAccuracy": _masked_spatial_accuracy(
             outputs["targetLocationLogits"],

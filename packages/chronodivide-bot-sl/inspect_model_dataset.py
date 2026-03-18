@@ -7,7 +7,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader
 
 from model_lib.batch import collate_model_samples
-from model_lib.dataset import ModelShardFilter, RA2SLSectionDataset, summarize_model_shards
+from model_lib.dataset import ModelShardFilter, RA2SLSectionDataset, RA2SLSequenceWindowDataset, summarize_model_shards
 
 
 def _parse_csv(value: str | None) -> list[str] | None:
@@ -36,6 +36,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cache-size", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--max-samples", type=int, default=1)
+    parser.add_argument("--window-size", type=int, default=1)
+    parser.add_argument("--window-stride", type=int, default=1)
     return parser.parse_args()
 
 
@@ -49,11 +51,20 @@ def main() -> None:
         player_side_ids=[args.side_id] if args.side_id is not None else None,
     )
 
-    dataset = RA2SLSectionDataset.from_directory(
-        args.tensor_dir,
-        shard_filter=shard_filter,
-        cache_size=args.cache_size,
-    )
+    if args.window_size > 1:
+        dataset = RA2SLSequenceWindowDataset.from_directory(
+            args.tensor_dir,
+            window_size=args.window_size,
+            window_stride=args.window_stride,
+            shard_filter=shard_filter,
+            cache_size=args.cache_size,
+        )
+    else:
+        dataset = RA2SLSectionDataset.from_directory(
+            args.tensor_dir,
+            shard_filter=shard_filter,
+            cache_size=args.cache_size,
+        )
     summary = summarize_model_shards(dataset.shard_records)
     print("Shard summary:")
     print(json.dumps(summary, indent=2))
@@ -84,6 +95,7 @@ def main() -> None:
     )
     batch = next(iter(loader))
     print(f"First batch size: {batch_size}")
+    print(f"Window size: {args.window_size}")
     _print_tensor_dict("Batched feature sections:", batch["feature_sections"])
     print()
     _print_tensor_dict("Batched training targets:", batch["training_targets"])

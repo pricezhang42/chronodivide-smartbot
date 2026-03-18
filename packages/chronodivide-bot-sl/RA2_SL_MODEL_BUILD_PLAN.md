@@ -135,6 +135,13 @@ Only after Stage 1 is training clean:
 - upgrade `units` to a true autoregressive selected-units head with derived EOF
 - optionally make `target` heads more autoregressive
 
+Current implementation state:
+
+- optional sequence-window batches are implemented
+- replay-window dataset items with `[B, S, ...]` support are implemented
+- an optional LSTM recurrent core is implemented
+- the default baseline can still run in single-step non-recurrent mode
+
 ## Proposed Architecture V1
 
 ### 1. Scalar Encoder
@@ -365,7 +372,13 @@ Recommended RA2 policy:
   - support `[B, S, ...]` sequence batches
   - optionally add recurrent or transformer sequence cores
 
-For the first RA2 model, this is a deliberate simplification, not an oversight.
+Current implementation state:
+
+- sample-wise training is still supported
+- replay-window datasets are implemented
+- `[B, S, ...]` batches are implemented
+- an optional LSTM sequence core is implemented
+- transformer sequence cores remain a later upgrade
 
 ## Data Pipeline Plan
 
@@ -514,15 +527,11 @@ Do not borrow directly:
 
 ## Recommended Immediate Next Coding Step
 
-Phase A is complete. The next coding step after the current encoder/torso work is:
+The next coding step after the current sequence-window + LSTM milestone is:
 
-1. add `model_lib/heads.py`
-2. add `model_lib/losses.py`
-3. run one-batch backward smoke tests
-4. keep the implementation compatible with later:
-   - availability-masked action logits
-   - teacher-forced head conditioning
-   - free-running metric passes
-   - sequence-window batching
+1. add a separate free-running evaluation pass
+2. compare free-running metrics directly against the current teacher-forced training path
+3. expand the Arab `Pinch Point LE` tensor corpus beyond the current 2-shard manifest
+4. re-run held-out spot checks after the larger corpus or freerunning metrics are in place
 
 This is the safest path to a working RA2 SL model without overcommitting to full AlphaStar complexity too early.

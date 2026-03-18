@@ -15,6 +15,8 @@ Related design note:
 - `[x]` Trainer implemented
 - `[x]` Tiny-slice overfit check passed
 - `[x]` Pinch Point Soviet-slice training run passed
+- `[x]` Sequence-window batching implemented
+- `[x]` Optional LSTM core implemented
 
 ## Phase 0: Contracts And Scope
 
@@ -259,9 +261,9 @@ Related design note:
 
 ## Phase 11: Optional AlphaStar-Like Upgrades
 
-- `[ ]` Add sequence batching if the baseline is stable.
-- `[ ]` Add an optional recurrent or transformer core.
-- `[ ]` Add replay-window dataset items with `[B, S, ...]` batch support.
+- `[x]` Add sequence batching if the baseline is stable.
+- `[x]` Add an optional recurrent or transformer core.
+- `[x]` Add replay-window dataset items with `[B, S, ...]` batch support.
 - `[x]` Add partial teacher-forced head conditioning for later heads:
   - gold `actionType` may condition later heads during training
   - gold `queue` may condition later heads during training

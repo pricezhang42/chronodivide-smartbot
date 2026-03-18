@@ -8,7 +8,12 @@ import torch
 from torch.utils.data import DataLoader
 
 from model_lib.batch import collate_model_samples
-from model_lib.dataset import ModelShardFilter, RA2SLSectionDataset, summarize_model_shards
+from model_lib.dataset import (
+    ModelShardFilter,
+    RA2SLSectionDataset,
+    RA2SLSequenceWindowDataset,
+    summarize_model_shards,
+)
 from model_lib.losses import compute_ra2_sl_loss
 from model_lib.model import RA2SLBaselineConfig, RA2SLBaselineModel
 
@@ -31,6 +36,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--side-id", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--cache-size", type=int, default=2)
+    parser.add_argument("--window-size", type=int, default=1)
+    parser.add_argument("--window-stride", type=int, default=1)
+    parser.add_argument("--use-lstm-core", action="store_true")
+    parser.add_argument("--lstm-num-layers", type=int, default=1)
     return parser.parse_args()
 
 
@@ -43,11 +52,20 @@ def main() -> None:
         replay_game_ids=_parse_csv(args.game_id),
         player_side_ids=[args.side_id] if args.side_id is not None else None,
     )
-    dataset = RA2SLSectionDataset.from_directory(
-        args.tensor_dir,
-        shard_filter=shard_filter,
-        cache_size=args.cache_size,
-    )
+    if args.window_size > 1:
+        dataset = RA2SLSequenceWindowDataset.from_directory(
+            args.tensor_dir,
+            window_size=args.window_size,
+            window_stride=args.window_stride,
+            shard_filter=shard_filter,
+            cache_size=args.cache_size,
+        )
+    else:
+        dataset = RA2SLSectionDataset.from_directory(
+            args.tensor_dir,
+            shard_filter=shard_filter,
+            cache_size=args.cache_size,
+        )
     summary = summarize_model_shards(dataset.shard_records)
     print("Shard summary:")
     print(json.dumps(summary, indent=2))
@@ -58,6 +76,8 @@ def main() -> None:
     model = RA2SLBaselineModel(
         RA2SLBaselineConfig(
             entity_name_vocab_size=shared_vocab_size,
+            use_lstm_core=bool(args.use_lstm_core),
+            lstm_num_layers=int(args.lstm_num_layers),
         )
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
@@ -83,6 +103,8 @@ def main() -> None:
     optimizer.step()
 
     print(f"Batch size: {batch_size}")
+    print(f"Window size: {args.window_size}")
+    print(f"Using LSTM core: {bool(args.use_lstm_core)}")
     print(f"Total loss: {float(loss_output.total_loss.item()):.6f}")
     print("Per-head losses:")
     for name, value in loss_output.loss_by_head.items():

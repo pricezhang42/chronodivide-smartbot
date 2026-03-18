@@ -14,7 +14,13 @@ from torch.utils.data import DataLoader, Dataset, Subset
 
 from action_dict import ACTION_INFO_MASK, ACTION_TYPE_ID_TO_NAME
 from model_lib.batch import collate_model_samples
-from model_lib.dataset import ModelShardFilter, ModelShardRecord, RA2SLSectionDataset, discover_model_shards
+from model_lib.dataset import (
+    ModelShardFilter,
+    ModelShardRecord,
+    RA2SLSectionDataset,
+    RA2SLSequenceWindowDataset,
+    discover_model_shards,
+)
 from model_lib.losses import compute_ra2_sl_loss
 from model_lib.model import RA2SLBaselineConfig, RA2SLBaselineModel
 
@@ -50,6 +56,10 @@ class TrainConfig:
     val_ratio: float
     seed: int
     cache_size: int
+    window_size: int
+    window_stride: int
+    use_lstm_core: bool
+    lstm_num_layers: int
     checkpoint_dir: Path
     device: str | None
     resume: Path | None
@@ -116,11 +126,19 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--val-ratio", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--cache-size", type=int, default=2)
+    parser.add_argument("--window-size", type=int, default=1)
+    parser.add_argument("--window-stride", type=int, default=1)
+    parser.add_argument("--use-lstm-core", action="store_true")
+    parser.add_argument("--lstm-num-layers", type=int, default=1)
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--resume", type=Path, default=None)
 
     args = parser.parse_args()
+    if args.window_size <= 0:
+        raise ValueError(f"--window-size must be positive, got {args.window_size}.")
+    if args.window_stride <= 0:
+        raise ValueError(f"--window-stride must be positive, got {args.window_stride}.")
     output_dir = args.output_dir.resolve()
     checkpoint_dir = args.checkpoint_dir.resolve() if args.checkpoint_dir is not None else output_dir / "checkpoints"
     side_ids = [int(args.side_id)] if args.side_id is not None else None
@@ -149,6 +167,10 @@ def parse_args() -> TrainConfig:
         val_ratio=args.val_ratio,
         seed=args.seed,
         cache_size=args.cache_size,
+        window_size=args.window_size,
+        window_stride=args.window_stride,
+        use_lstm_core=bool(args.use_lstm_core),
+        lstm_num_layers=args.lstm_num_layers,
         checkpoint_dir=checkpoint_dir,
         device=args.device,
         resume=args.resume.resolve() if args.resume is not None else None,
@@ -234,6 +256,17 @@ def build_loader(dataset: Dataset[Any], config: TrainConfig, *, shuffle: bool) -
     )
 
 
+def build_section_dataset(records: list[ModelShardRecord], config: TrainConfig) -> Dataset[Any]:
+    if config.window_size > 1:
+        return RA2SLSequenceWindowDataset(
+            records,
+            window_size=config.window_size,
+            window_stride=config.window_stride,
+            cache_size=config.cache_size,
+        )
+    return RA2SLSectionDataset(records, cache_size=config.cache_size)
+
+
 def build_action_type_weighting(
     dataset: Dataset[Any],
     config: TrainConfig,
@@ -250,10 +283,17 @@ def build_action_type_weighting(
     counts = torch.zeros(class_count, dtype=torch.float64)
     for sample_index in range(len(dataset)):
         sample = dataset[sample_index]
-        if int(sample["training_masks"]["actionTypeLossMask"].item()) != 1:
+        action_type_mask = sample["training_masks"]["actionTypeLossMask"].reshape(-1) > 0
+        if not bool(action_type_mask.any()):
             continue
-        action_type_id = int(torch.argmax(sample["training_targets"]["actionTypeOneHot"]).item())
-        counts[action_type_id] += 1.0
+        action_type_ids = torch.argmax(
+            sample["training_targets"]["actionTypeOneHot"].reshape(-1, class_count),
+            dim=-1,
+        )
+        valid_action_type_ids = action_type_ids[action_type_mask]
+        if valid_action_type_ids.numel() == 0:
+            continue
+        counts += torch.bincount(valid_action_type_ids, minlength=class_count).to(torch.float64)
 
     seen_mask = counts > 0
     weights = torch.ones(class_count, dtype=torch.float32)
@@ -362,6 +402,11 @@ def finalize_metrics(accumulator: dict[str, float]) -> dict[str, float]:
     return finalized
 
 
+def _count_supervised_steps(batch: dict[str, Any]) -> int:
+    action_type_targets = batch["training_targets"]["actionTypeOneHot"]
+    return int(action_type_targets.reshape(-1, action_type_targets.shape[-1]).shape[0])
+
+
 def run_epoch(
     *,
     model: RA2SLBaselineModel,
@@ -403,7 +448,7 @@ def run_epoch(
 
         accumulator["total_loss"] += float(loss_output.total_loss.detach().item())
         accumulator["batch_count"] += 1.0
-        accumulator["sample_count"] += float(batch["feature_sections"]["scalar"].shape[0])
+        accumulator["sample_count"] += float(_count_supervised_steps(batch))
         accumulate_metric_group(accumulator, "loss", loss_output.loss_by_head)
         accumulate_metric_group(accumulator, "metric", loss_output.metrics)
 
@@ -483,8 +528,8 @@ def main() -> None:
     if not train_records:
         raise ValueError("Training split is empty after shard splitting.")
 
-    train_dataset = RA2SLSectionDataset(train_records, cache_size=config.cache_size)
-    val_dataset = RA2SLSectionDataset(val_records, cache_size=config.cache_size) if val_records else None
+    train_dataset = build_section_dataset(train_records, config)
+    val_dataset = build_section_dataset(val_records, config) if val_records else None
     train_dataset = limit_dataset(train_dataset, config.max_train_samples)
     if val_dataset is not None:
         val_dataset = limit_dataset(val_dataset, config.max_val_samples)
@@ -499,6 +544,8 @@ def main() -> None:
     model = RA2SLBaselineModel(
         RA2SLBaselineConfig(
             entity_name_vocab_size=entity_name_vocab_size,
+            use_lstm_core=config.use_lstm_core,
+            lstm_num_layers=config.lstm_num_layers,
         )
     ).to(device)
     optimizer = torch.optim.AdamW(
@@ -527,6 +574,12 @@ def main() -> None:
         "valShardCount": len(val_records),
         "trainSampleCount": len(train_dataset),
         "valSampleCount": len(val_dataset) if val_dataset is not None else 0,
+        "trainDatasetItemCount": len(train_dataset),
+        "valDatasetItemCount": len(val_dataset) if val_dataset is not None else 0,
+        "windowSize": config.window_size,
+        "windowStride": config.window_stride,
+        "useLstmCore": config.use_lstm_core,
+        "lstmNumLayers": config.lstm_num_layers,
         "teacherForcingMode": config.teacher_forcing_mode,
         "actionTypeWeighting": action_type_weight_payload,
         "trainShards": [record.stem for record in train_records],
@@ -623,10 +676,16 @@ def main() -> None:
         "valShardCount": len(val_records),
         "trainSampleCount": len(train_dataset),
         "valSampleCount": len(val_dataset) if val_dataset is not None else 0,
+        "trainDatasetItemCount": len(train_dataset),
+        "valDatasetItemCount": len(val_dataset) if val_dataset is not None else 0,
         "entityNameVocabSize": entity_name_vocab_size,
         "epochs": config.epochs,
         "checkpointDir": str(config.checkpoint_dir),
         "bestValLoss": best_val_loss,
+        "windowSize": config.window_size,
+        "windowStride": config.window_stride,
+        "useLstmCore": config.use_lstm_core,
+        "lstmNumLayers": config.lstm_num_layers,
         "teacherForcingMode": config.teacher_forcing_mode,
         "actionTypeWeighting": action_type_weight_payload,
         "finalTrainMetrics": last_train_metrics,
