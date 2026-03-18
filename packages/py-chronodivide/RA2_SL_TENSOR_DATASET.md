@@ -34,6 +34,12 @@ It can also carry replay-constant super-weapon recharge metadata:
 
 This is intended for downstream feature builders that need to normalize replay `timerSeconds` by per-type nominal `RechargeTime` from the ruleset.
 
+It can also carry replay-constant static rules-driven tech metadata:
+
+- `staticTechTree`
+
+This is intended for downstream projects that want a reusable prerequisite / build-tree view from `RulesApi` without rebuilding it ad hoc.
+
 ## Extraction Model
 
 The dataset is action-centric.
@@ -105,6 +111,17 @@ In addition to the tensor sections, each action-aligned sample now also carries:
 - `playerSuperWeapons`
 
 These stay as generic raw summaries for downstream projects to turn into their own feature layout.
+
+`playerProduction` now includes both:
+
+- `availableCountsByQueueType`
+- `availableObjectsByQueueType`
+- `availableObjects`
+- `catalogObjects`
+
+The queue-type summaries and `availableObjects` are intended to represent the current legally available production set at that timestep. They are canonically regrouped with `getQueueTypeForObject(...)` when the engine exposes it, instead of trusting the raw queue-specific query shape directly.
+
+`catalogObjects` is the broader replay-time production catalog exposed by the engine rules/runtime. It is useful for debugging and schema inspection, but downstream action-availability logic should prefer `availableObjects` and `availableObjectsByQueueType`.
 
 ## Label Tensor Sections
 

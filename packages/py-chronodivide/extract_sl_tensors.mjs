@@ -53,6 +53,7 @@ async function writeDatasetJson(outputPath, result) {
       ["options", result.options],
       ["schema", result.schema],
       ["superWeaponSchema", result.superWeaponSchema],
+      ["staticTechTree", result.staticTechTree],
       ["staticMapSchema", result.staticMapSchema],
       ["staticMapByPlayer", result.staticMapByPlayer],
       ["counts", result.counts],
@@ -133,7 +134,7 @@ function flattenSectionValue(value) {
     }
     flattened.push(Number.isFinite(current) ? Number(current) : 0);
   }
-  return flattened.reverse();
+  return flattened;
 }
 
 function writeTensorSectionFiles(outputDir, schemaSections, samples, tensorKey, filePrefix) {
@@ -225,6 +226,7 @@ async function writeDatasetBinary(outputPath, result) {
     options: result.options,
     schema: result.schema,
     superWeaponSchema: result.superWeaponSchema,
+    staticTechTree: result.staticTechTree,
     staticMapSchema: result.staticMapSchema,
     staticMapByPlayer: result.staticMapByPlayer,
     counts: result.counts,

@@ -662,6 +662,34 @@ def _collect_selected_entities(sample: dict[str, Any], self_entities: list[dict[
     return selected_entities
 
 
+def _available_object_names_by_queue(player_production: dict[str, Any]) -> dict[str, set[str]]:
+    available_names_by_queue: dict[str, set[str]] = {}
+    for entry in player_production.get("availableObjectsByQueueType", []):
+        if not isinstance(entry, dict):
+            continue
+        queue_type_name = entry.get("queueTypeName")
+        if not isinstance(queue_type_name, str):
+            continue
+        names = {
+            str(obj.get("name"))
+            for obj in entry.get("objects", [])
+            if isinstance(obj, dict) and isinstance(obj.get("name"), str)
+        }
+        available_names_by_queue[queue_type_name] = names
+    return available_names_by_queue
+
+
+def _queued_object_names(player_production: dict[str, Any]) -> set[str]:
+    queued_names: set[str] = set()
+    for queue in player_production.get("queues", []):
+        if not isinstance(queue, dict):
+            continue
+        for item in queue.get("items", []):
+            if isinstance(item, dict) and isinstance(item.get("objectName"), str):
+                queued_names.add(str(item["objectName"]))
+    return queued_names
+
+
 def _is_order_action_available(
     action_type_name: str,
     *,
@@ -710,6 +738,10 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
     self_unit_count = float(scalar[_scalar_name_index(schema, "self_unit_count")])
     self_building_count = float(scalar[_scalar_name_index(schema, "self_building_count")])
     entity_mask = sample["featureTensors"]["entityMask"]
+    available_names_by_queue = _available_object_names_by_queue(player_production)
+    structure_available_names = available_names_by_queue.get("Structures", set())
+    available_object_names = set().union(*available_names_by_queue.values()) if available_names_by_queue else set()
+    queued_object_names = _queued_object_names(player_production)
     available_counts_by_name = {
         str(entry.get("queueTypeName")): _safe_float(entry.get("count"), 0.0)
         for entry in player_production.get("availableCountsByQueueType", [])
@@ -722,7 +754,7 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
     }
     has_build_sidebar = any(value > 0.0 for value in available_counts_by_name.values()) or any(
         value > 0.0 for value in factory_counts_by_name.values()
-    )
+    ) or bool(available_object_names)
     known_super_weapon_types = {
         str(entry.get("typeName"))
         for entry in player_super_weapons
@@ -777,9 +809,33 @@ def build_available_action_mask(sample: dict[str, Any], dataset: dict[str, Any])
                 selection_identity_unknown=selection_identity_unknown,
             )
         elif action_type_name.startswith("Queue::"):
-            enabled = 1 if has_build_sidebar or has_self_buildings else 0
+            _, queue_update_type_name, item_name = action_type_name.split("::", 2)
+            if queue_update_type_name == "Add":
+                if item_name == "<unk_item>":
+                    enabled = 1 if (available_object_names or has_build_sidebar or has_self_buildings) else 0
+                else:
+                    enabled = 1 if (
+                        item_name in available_object_names or (not available_object_names and (has_build_sidebar or has_self_buildings))
+                    ) else 0
+            else:
+                if item_name == "<unk_item>":
+                    enabled = 1 if (queued_object_names or has_self_buildings) else 0
+                else:
+                    enabled = 1 if (
+                        item_name in queued_object_names or (not queued_object_names and has_self_buildings)
+                    ) else 0
         elif action_type_name.startswith("PlaceBuilding::"):
-            enabled = 1 if (has_construction_yard or has_build_sidebar) else 0
+            building_name = action_type_name.split("::", 1)[1]
+            if building_name == "<unk_building>":
+                enabled = 1 if (structure_available_names or has_construction_yard or has_build_sidebar) else 0
+            else:
+                enabled = 1 if (
+                    building_name in available_object_names
+                    or (
+                        not available_object_names
+                        and (building_name in structure_available_names or has_construction_yard or has_build_sidebar)
+                    )
+                ) else 0
         elif action_type_name.startswith("ActivateSuperWeapon::"):
             superweapon_name = action_type_name.split("::", 1)[1]
             if known_super_weapon_types:

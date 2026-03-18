@@ -88,7 +88,7 @@ from transform_lib.schema_utils import (
 )
 from transform_lib.training_targets import finalize_training_target_sidecars
 
-EXTRACT_CACHE_VERSION = "v2_binary"
+EXTRACT_CACHE_VERSION = "v3_binary_flatten_fix"
 
 
 def node_player_arg(player: str) -> str | None:
@@ -262,6 +262,7 @@ def load_binary_dataset(dataset_dir: Path) -> dict[str, Any]:
         "options": manifest["options"],
         "schema": manifest["schema"],
         "superWeaponSchema": manifest["superWeaponSchema"],
+        "staticTechTree": manifest.get("staticTechTree"),
         "staticMapSchema": manifest["staticMapSchema"],
         "staticMapByPlayer": manifest["staticMapByPlayer"],
         "counts": manifest["counts"],

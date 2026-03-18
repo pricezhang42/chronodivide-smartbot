@@ -1,4 +1,5 @@
 import { extractObservationFeatureSample, extractStaticMapFeatureSample, getObservationFeatureSchema, getStaticMapFeatureSchema } from "./features.mjs";
+import { buildStaticTechTree } from "./availability.mjs";
 import {
   buildActionTimelines,
   decodeActionLabel,
@@ -109,7 +110,7 @@ function flattenNestedNumbers(value) {
     flattened.push(numericOrDefault(current, 0));
   }
 
-  return flattened.reverse();
+  return flattened;
 }
 
 function buildActionCounts(samples) {
@@ -680,6 +681,7 @@ export async function extractReplaySupervisedDataset({
     minimapSize,
   };
   const superWeaponSchema = buildSuperWeaponSchema(context.gameApi);
+  const staticTechTree = buildStaticTechTree(context.gameApi);
   const staticMapByPlayer = Object.fromEntries(
     sampledPlayers.map((playerName) => [
       playerName,
@@ -711,6 +713,7 @@ export async function extractReplaySupervisedDataset({
     },
     schema: buildTensorSchema(options, sharedNameVocabulary),
     superWeaponSchema,
+    staticTechTree,
     staticMapByPlayer,
     staticMapSchema: getStaticMapFeatureSchema({ spatialSize }),
     counts: buildActionCounts(rawSamples),

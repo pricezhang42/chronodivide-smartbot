@@ -183,6 +183,115 @@ function queueItemToPlain(item) {
   };
 }
 
+function technoRulesToPlain(rules) {
+  if (!rules) {
+    return undefined;
+  }
+
+  return {
+    name: rules?.name,
+    type: rules?.type,
+    cost: safeNumber(rules?.cost),
+    techLevel: safeNumber(rules?.techLevel),
+  };
+}
+
+function technoRulesKey(rules) {
+  const name = rules?.name;
+  const type = rules?.type;
+  if (typeof name !== "string") {
+    return null;
+  }
+  return `${type ?? "unknown"}::${name}`;
+}
+
+function dedupeTechnoRules(rulesList) {
+  const unique = new Map();
+  for (const rules of Array.isArray(rulesList) ? rulesList : []) {
+    const key = technoRulesKey(rules);
+    if (!key || unique.has(key)) {
+      continue;
+    }
+    unique.set(key, rules);
+  }
+  return Array.from(unique.values()).sort((left, right) => String(left?.name ?? "").localeCompare(String(right?.name ?? "")));
+}
+
+function collectQueriedAvailableRules(production) {
+  if (typeof production.getAvailableObjects !== "function") {
+    return [];
+  }
+
+  const queried = [];
+  for (const queueType of Object.keys(QUEUE_TYPE_NAMES)) {
+    const numericQueueType = Number(queueType);
+    let availableObjects = [];
+    try {
+      availableObjects = production.getAvailableObjects(numericQueueType) ?? [];
+    } catch {
+      availableObjects = [];
+    }
+    if (Array.isArray(availableObjects)) {
+      queried.push(...availableObjects);
+    }
+  }
+
+  return dedupeTechnoRules(queried);
+}
+
+function collectCurrentAvailableRules(production) {
+  const fromAvailabilityCheck =
+    Array.isArray(production.allAvailableObjects) && typeof production.isAvailableForProduction === "function"
+      ? production.allAvailableObjects.filter((rules) => {
+          try {
+            return Boolean(production.isAvailableForProduction(rules));
+          } catch {
+            return false;
+          }
+        })
+      : [];
+
+  const currentAvailableRules = dedupeTechnoRules(fromAvailabilityCheck);
+  if (currentAvailableRules.length > 0) {
+    return currentAvailableRules;
+  }
+  return collectQueriedAvailableRules(production);
+}
+
+function buildAvailableObjectsByQueueType(production, currentAvailableRules) {
+  const grouped = new Map(Object.keys(QUEUE_TYPE_NAMES).map((queueType) => [Number(queueType), []]));
+
+  for (const rules of currentAvailableRules) {
+    if (typeof production.getQueueTypeForObject !== "function") {
+      continue;
+    }
+    let queueType = null;
+    try {
+      queueType = production.getQueueTypeForObject(rules);
+    } catch {
+      queueType = null;
+    }
+    if (!grouped.has(queueType)) {
+      continue;
+    }
+    const summary = technoRulesToPlain(rules);
+    if (summary) {
+      grouped.get(queueType).push(summary);
+    }
+  }
+
+  return Object.keys(QUEUE_TYPE_NAMES).map((queueType) => {
+    const numericQueueType = Number(queueType);
+    const objects = grouped.get(numericQueueType) ?? [];
+    return {
+      queueType: numericQueueType,
+      queueTypeName: QUEUE_TYPE_NAMES[numericQueueType] ?? `QueueType_${numericQueueType}`,
+      count: objects.length,
+      objects,
+    };
+  });
+}
+
 function queueToPlain(queue) {
   if (!queue) {
     return undefined;
@@ -215,23 +324,17 @@ export function productionToPlain(production) {
           count: safeNumber(count, 0),
         }))
       : [];
-  const availableCountsByQueueType =
-    typeof production.getAvailableObjects === "function"
-      ? Object.keys(QUEUE_TYPE_NAMES).map((queueType) => {
-          const numericQueueType = Number(queueType);
-          let availableObjects = [];
-          try {
-            availableObjects = production.getAvailableObjects(numericQueueType) ?? [];
-          } catch {
-            availableObjects = [];
-          }
-          return {
-            queueType: numericQueueType,
-            queueTypeName: QUEUE_TYPE_NAMES[numericQueueType] ?? `QueueType_${numericQueueType}`,
-            count: Array.isArray(availableObjects) ? availableObjects.length : 0,
-          };
-        })
-      : [];
+  const currentAvailableRules = collectCurrentAvailableRules(production);
+  const availableObjects = currentAvailableRules.map(technoRulesToPlain).filter(Boolean);
+  const availableObjectsByQueueType = buildAvailableObjectsByQueueType(production, currentAvailableRules);
+  const availableCountsByQueueType = availableObjectsByQueueType.map(({ queueType, queueTypeName, count }) => ({
+    queueType,
+    queueTypeName,
+    count,
+  }));
+  const catalogObjects = Array.isArray(production.allAvailableObjects)
+    ? dedupeTechnoRules(production.allAvailableObjects).map(technoRulesToPlain).filter(Boolean)
+    : [];
 
   return {
     maxTechLevel: safeNumber(production.maxTechLevel),
@@ -240,16 +343,11 @@ export function productionToPlain(production) {
     queues: queueSummaries,
     factoryCounts,
     availableCountsByQueueType,
-    availableObjectCount: Array.isArray(production.allAvailableObjects) ? production.allAvailableObjects.length : 0,
-    availableObjects:
-      Array.isArray(production.allAvailableObjects)
-        ? production.allAvailableObjects.map((rules) => ({
-            name: rules?.name,
-            type: rules?.type,
-            cost: safeNumber(rules?.cost),
-            techLevel: safeNumber(rules?.techLevel),
-          }))
-        : [],
+    availableObjectsByQueueType,
+    availableObjectCount: availableObjects.length,
+    availableObjects,
+    catalogObjectCount: catalogObjects.length,
+    catalogObjects,
   };
 }
 
