@@ -6,6 +6,8 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
+from model_lib.units_autoregressive import build_units_autoregressive_targets
+
 
 def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     mask_float = mask.to(values.dtype)
@@ -47,13 +49,41 @@ def _masked_accuracy(logits: torch.Tensor, targets: torch.Tensor, mask: torch.Te
     return _masked_mean(correct, mask)
 
 
+def _resize_spatial_target_one_hot(target_one_hot: torch.Tensor, target_hw: tuple[int, int]) -> torch.Tensor:
+    source_height = int(target_one_hot.shape[-2])
+    source_width = int(target_one_hot.shape[-1])
+    target_height, target_width = int(target_hw[0]), int(target_hw[1])
+    if (source_height, source_width) == (target_height, target_width):
+        return target_one_hot
+
+    flat_source = target_one_hot.reshape(-1, source_height * source_width)
+    source_indices = torch.argmax(flat_source.to(torch.float32), dim=-1)
+    source_y = source_indices // source_width
+    source_x = source_indices % source_width
+
+    scaled_y = torch.clamp((source_y * target_height) // source_height, min=0, max=target_height - 1)
+    scaled_x = torch.clamp((source_x * target_width) // source_width, min=0, max=target_width - 1)
+
+    resized = torch.zeros(
+        flat_source.shape[0],
+        target_height * target_width,
+        dtype=target_one_hot.dtype,
+        device=target_one_hot.device,
+    )
+    resized_indices = scaled_y * target_width + scaled_x
+    resized.scatter_(1, resized_indices.unsqueeze(-1), 1)
+    return resized.reshape(*target_one_hot.shape[:-2], target_height, target_width)
+
+
 def _masked_spatial_loss(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    target_one_hot = _resize_spatial_target_one_hot(target_one_hot, logits.shape[-2:])
     flat_logits = logits.reshape(-1, logits.shape[-2] * logits.shape[-1])
     flat_targets = _one_hot_to_index(target_one_hot.reshape(-1, target_one_hot.shape[-2] * target_one_hot.shape[-1]))
     return _masked_classification_loss(flat_logits, flat_targets, mask.reshape(-1))
 
 
 def _masked_spatial_accuracy(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    target_one_hot = _resize_spatial_target_one_hot(target_one_hot, logits.shape[-2:])
     flat_logits = logits.reshape(-1, logits.shape[-2] * logits.shape[-1])
     flat_targets = _one_hot_to_index(target_one_hot.reshape(-1, target_one_hot.shape[-2] * target_one_hot.shape[-1]))
     return _masked_accuracy(flat_logits, flat_targets, mask.reshape(-1))
@@ -92,13 +122,15 @@ def compute_ra2_sl_loss(
     action_type_targets = _one_hot_to_index(targets["actionTypeOneHot"])
     delay_targets = _one_hot_to_index(targets["delayOneHot"])
     queue_targets = _one_hot_to_index(targets["queueOneHot"])
-    units_targets = _one_hot_to_index(targets["unitsOneHot"])
     target_entity_targets = _one_hot_to_index(targets["targetEntityOneHot"])
 
     action_type_mask = masks["actionTypeLossMask"].squeeze(-1) > 0
     delay_mask = masks["delayLossMask"].squeeze(-1) > 0
     queue_mask = masks["queueLossMask"].squeeze(-1) > 0
-    units_mask = masks["unitsLossMask"] > 0
+    units_autoregressive_targets = build_units_autoregressive_targets(
+        targets["unitsOneHot"],
+        masks["unitsLossMask"],
+    )
     target_entity_mask = masks["targetEntityLossMask"].squeeze(-1) > 0
     target_location_mask = masks["targetLocationLossMask"].squeeze(-1) > 0
     target_location2_mask = masks["targetLocation2LossMask"].squeeze(-1) > 0
@@ -128,9 +160,11 @@ def compute_ra2_sl_loss(
     delay_loss = _masked_classification_loss(flat_delay_logits, flat_delay_targets, flat_delay_mask)
     queue_loss = _masked_classification_loss(flat_queue_logits, flat_queue_targets, flat_queue_mask)
 
-    units_logits = outputs["unitsLogits"].reshape(-1, outputs["unitsLogits"].shape[-1])
-    units_target_flat = units_targets.reshape(-1)
-    units_mask_flat = units_mask.reshape(-1)
+    units_logits, units_target_flat, units_mask_flat = _flatten_logits_and_targets(
+        outputs["unitsLogits"],
+        units_autoregressive_targets.target_ids,
+        units_autoregressive_targets.target_mask,
+    )
     units_loss = _masked_classification_loss(units_logits, units_target_flat, units_mask_flat)
 
     flat_target_entity_logits, flat_target_entity_targets, flat_target_entity_mask = _flatten_logits_and_targets(

@@ -55,7 +55,7 @@ class BuildOrderTraceEncoder(nn.Module):
 class ScalarEncoderConfig:
     build_order_vocab_size: int
     hidden_dim: int = 64
-    output_dim: int = 256
+    output_dim: int = 128
     dropout: float = 0.1
     section_order: tuple[str, ...] = (
         "scalar",
@@ -133,7 +133,7 @@ class EntityEncoderConfig:
     entity_name_vocab_size: int
     feature_dim: int = 74
     name_embedding_dim: int = 32
-    model_dim: int = 128
+    model_dim: int = 64
     num_heads: int = 4
     num_layers: int = 2
     dropout: float = 0.1
@@ -195,8 +195,8 @@ class EntityEncoder(nn.Module):
 
 @dataclass
 class SpatialEncoderConfig:
-    hidden_dim: int = 128
-    output_dim: int = 128
+    hidden_dim: int = 64
+    output_dim: int = 64
     dropout: float = 0.1
 
 
@@ -227,18 +227,23 @@ class SpatialEncoder(nn.Module):
         minimap: torch.Tensor,
         map_static: torch.Tensor,
     ) -> dict[str, torch.Tensor]:
-        target_size = spatial.shape[-2:]
-        resized_minimap = F.interpolate(
-            minimap.to(torch.float32),
+        target_size = minimap.shape[-2:]
+        resized_spatial = F.interpolate(
+            spatial.to(torch.float32),
             size=target_size,
             mode="bilinear",
             align_corners=False,
         )
+        resized_map_static = F.interpolate(
+            map_static.to(torch.float32),
+            size=target_size,
+            mode="nearest",
+        )
         stacked = torch.cat(
             [
-                spatial.to(torch.float32),
-                resized_minimap,
-                map_static.to(torch.float32),
+                resized_spatial,
+                minimap.to(torch.float32),
+                resized_map_static,
             ],
             dim=1,
         )

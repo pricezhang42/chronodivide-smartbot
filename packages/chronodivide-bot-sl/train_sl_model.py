@@ -106,8 +106,8 @@ def parse_args() -> TrainConfig:
     parser.add_argument(
         "--teacher-forcing-mode",
         type=str,
-        choices=("none", "action_type", "action_type_queue"),
-        default="action_type_queue",
+        choices=("none", "action_type", "action_type_queue", "full"),
+        default="full",
     )
     parser.add_argument(
         "--action-type-weighting",
@@ -434,6 +434,7 @@ def run_epoch(
             outputs = model(
                 batch["model_inputs"],
                 teacher_forcing_targets=batch["training_targets"] if training else None,
+                teacher_forcing_masks=batch["training_masks"] if training else None,
                 teacher_forcing_mode=teacher_forcing_mode if training else "none",
             )
             loss_output = compute_ra2_sl_loss(

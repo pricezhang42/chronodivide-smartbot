@@ -96,7 +96,8 @@ def main() -> None:
     outputs = model(
         batch["model_inputs"],
         teacher_forcing_targets=batch["training_targets"],
-        teacher_forcing_mode="action_type_queue",
+        teacher_forcing_masks=batch["training_masks"],
+        teacher_forcing_mode="full",
     )
     loss_output = compute_ra2_sl_loss(outputs, batch)
     loss_output.total_loss.backward()

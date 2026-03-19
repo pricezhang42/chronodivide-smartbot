@@ -141,6 +141,7 @@ Current implementation state:
 - replay-window dataset items with `[B, S, ...]` support are implemented
 - an optional LSTM recurrent core is implemented
 - the default baseline can still run in single-step non-recurrent mode
+- the `units` head now uses a derived EOF-autoregressive decoding path while keeping the stored tensor contract unchanged
 
 ## Proposed Architecture V1
 
@@ -249,11 +250,11 @@ Recommended head design:
   - binary classifier
 - `unitsHead`
   - first V1 can be parallel per-slot classification over entity slots using masks
-  - do not start with autoregressive EOF unless needed
+- the initial baseline started without EOF-autoregressive selected-units decoding, but that upgrade is now implemented because it materially improves mAS parity
 - `targetEntityHead`
   - classifier over entity slots
 - `targetLocationHead`
-  - conv/deconv or 1x1 projection over spatial feature map to `32x32`
+  - conv/deconv or 1x1 projection over spatial feature map to `64x64`
 - `targetLocation2Head`
   - same shape as targetLocation
 - `quantityHead`
@@ -274,15 +275,15 @@ Recommended RA2 policy:
 - V1.5 / later:
   - add teacher-forced head conditioning
   - action type conditions queue / units / target heads
-  - queue and selected units can condition later heads
-  - selected-units head can become autoregressive with derived EOF
+- queue and selected units can condition later heads
+- selected-units conditioning now comes from an autoregressive units head with a derived EOF step
 
 Current implementation state:
 
-- partial teacher-forced conditioning is now implemented
-- during training, later heads can read the gold `actionType` and `queue`
+- full multi-head teacher-forced conditioning is now implemented
+- during training, later heads can read gold `actionType`, `delay`, `queue`, `units`, `targetEntity`, `targetLocation`, and `targetLocation2` when those targets are valid
 - during evaluation/inference, the same heads fall back to the model's own predicted arguments
-- this improved the small held-out Arab Pinch Point slice materially, but it is still not equivalent to a full `mimic_forward`-style autoregressive decoder
+- this is much closer to a `mimic_forward`-style path, but it is still not the exact mAS decoder because free-running evaluation is still separate work
 
 So the model path should be built so that an autoregressive embedding can be inserted later without a large rewrite.
 
@@ -344,13 +345,12 @@ Recommended RA2 training protocol:
 ### V1 baseline
 
 - one forward pass
-- no autoregressive teacher forcing yet
+- full multi-head teacher-forced training pass is implemented
 - compute masked per-head losses directly from model outputs and saved targets
 
 ### V1.5 / later
 
-- add a `mimic_forward`-style path for teacher-forced decoding
-- use GT earlier arguments when training later heads
+- keep the teacher-forced pass
 - run a second unguided pass for reported metrics
 
 This distinction matters because mAS does not report purely teacher-forced accuracy. It trains with teacher forcing and evaluates with a freerunning pass. That is a good pattern for RA2 as well.
@@ -494,7 +494,7 @@ Do not borrow:
 ### Phase E: AlphaStar-Like Upgrades
 
 17. Add a sequence core.
-18. Upgrade selected-units to an autoregressive head with derived EOF.
+18. Completed: upgrade selected-units to an autoregressive head with derived EOF while keeping EOF derived rather than stored canonically.
 19. Consider autoregressive dependency order:
    - action type
    - queue

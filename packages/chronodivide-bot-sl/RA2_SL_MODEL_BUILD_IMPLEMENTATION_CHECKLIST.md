@@ -26,8 +26,8 @@ Related design note:
 - `[ ]` Freeze the initial V1 training scope:
   - single-step supervised model
   - no recurrent core in the first version
-  - no AlphaStar-style autoregressive selected-units head in the first version
-  - no teacher-forced autoregressive decoding in the first version
+  - the original first version started without AlphaStar-style autoregressive selected-units decoding
+  - the current implementation now includes a derived EOF-autoregressive `units` head
 - `[ ]` Freeze the initial training slice:
   - map = `2_pinch_point_le.map`
   - winner side/country filtering policy
@@ -94,7 +94,7 @@ Related design note:
   - `quantity`
 - `[ ]` Freeze the V1 training-policy distinction:
   - baseline training is non-autoregressive
-  - later teacher-forced decoding is a planned upgrade
+  - full multi-head teacher-forced decoding is implemented
   - later free-running evaluation is a planned upgrade
 
 ## Phase 3: Baseline Encoders
@@ -158,8 +158,8 @@ Related design note:
 
 - `[x]` `actionTypeHead` uses the static RA2 action dict size.
 - `[x]` `actionTypeHead` supports availability masking from `availableActionMask`.
-- `[x]` `unitsHead` V1 is slot-wise masked classification, not autoregressive EOF decoding.
-- `[x]` `targetLocation` heads produce `32 x 32` logits aligned with saved training targets.
+- `[x]` `unitsHead` now uses derived EOF-autoregressive decoding while leaving canonical replay tensors unchanged.
+- `[x]` `targetLocation` heads produce `64 x 64` logits aligned with native saved training targets.
 - `[x]` Decide whether V1 heads are:
   - pure shared-latent heads
   - or partially conditioned on predicted/teacher-forced earlier arguments
@@ -268,9 +268,11 @@ Related design note:
   - gold `actionType` may condition later heads during training
   - gold `queue` may condition later heads during training
   - evaluation/inference still runs free from the model's own predictions
-- `[ ]` Add a `mimic_forward`-style teacher-forced training path.
+- `[x]` Add a full multi-head teacher-forced training path:
+  - gold `actionType`, `delay`, `queue`, `units`, `targetEntity`, `targetLocation`, and `targetLocation2` can condition later heads when valid
+  - unresolved targets do not inject teacher-forced garbage because conditioning is masked by valid supervision
 - `[ ]` Add a separate free-running evaluation forward pass.
-- `[ ]` Add a derived EOF-based autoregressive `units` head.
+- `[x]` Add a derived EOF-based autoregressive `units` head.
 - `[ ]` Add stronger autoregressive coupling between heads.
 - `[ ]` Re-evaluate whether the extra complexity improves validation.
 

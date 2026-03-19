@@ -24,13 +24,13 @@ class RA2SLCoreConfig:
     entity_name_vocab_size: int
     build_order_vocab_size: int = len(ACTION_TYPE_ID_TO_NAME)
     scalar_hidden_dim: int = 64
-    scalar_output_dim: int = 256
-    entity_model_dim: int = 128
+    scalar_output_dim: int = 128
+    entity_model_dim: int = 64
     entity_num_heads: int = 4
     entity_num_layers: int = 2
-    spatial_hidden_dim: int = 128
-    spatial_output_dim: int = 128
-    fusion_hidden_dim: int = 256
+    spatial_hidden_dim: int = 64
+    spatial_output_dim: int = 64
+    fusion_hidden_dim: int = 128
     use_lstm_core: bool = False
     lstm_num_layers: int = 1
     dropout: float = 0.1
@@ -193,16 +193,16 @@ class RA2SLBaselineConfig:
     delay_bins: int = LABEL_LAYOUT_V1_DELAY_BINS
     max_selected_units: int = 64
     max_entities: int = 128
-    spatial_size: int = 32
+    spatial_size: int = 64
     build_order_vocab_size: int = len(ACTION_TYPE_ID_TO_NAME)
     scalar_hidden_dim: int = 64
-    scalar_output_dim: int = 256
-    entity_model_dim: int = 128
+    scalar_output_dim: int = 128
+    entity_model_dim: int = 64
     entity_num_heads: int = 4
     entity_num_layers: int = 2
-    spatial_hidden_dim: int = 128
-    spatial_output_dim: int = 128
-    fusion_hidden_dim: int = 256
+    spatial_hidden_dim: int = 64
+    spatial_output_dim: int = 64
+    fusion_hidden_dim: int = 128
     head_hidden_dim: int = 256
     use_lstm_core: bool = False
     lstm_num_layers: int = 1
@@ -250,6 +250,7 @@ class RA2SLBaselineModel(nn.Module):
         model_inputs: dict[str, object],
         *,
         teacher_forcing_targets: dict[str, torch.Tensor] | None = None,
+        teacher_forcing_masks: dict[str, torch.Tensor] | None = None,
         teacher_forcing_mode: str = "none",
     ) -> dict[str, torch.Tensor]:
         core_outputs = self.core(model_inputs)
@@ -278,6 +279,14 @@ class RA2SLBaselineModel(nn.Module):
                         for name, tensor in teacher_forcing_targets.items()
                     }
                 ),
+                teacher_forcing_masks=(
+                    None
+                    if teacher_forcing_masks is None
+                    else {
+                        name: flatten_sequence_tensor(tensor)
+                        for name, tensor in teacher_forcing_masks.items()
+                    }
+                ),
                 teacher_forcing_mode=teacher_forcing_mode,
             )
 
@@ -294,6 +303,7 @@ class RA2SLBaselineModel(nn.Module):
             spatial_feature_map=core_outputs["spatial_feature_map"],
             available_action_mask=model_inputs["scalar_sections"].get("availableActionMask"),
             teacher_forcing_targets=teacher_forcing_targets,
+            teacher_forcing_masks=teacher_forcing_masks,
             teacher_forcing_mode=teacher_forcing_mode,
         )
         return {**core_outputs, **head_outputs}

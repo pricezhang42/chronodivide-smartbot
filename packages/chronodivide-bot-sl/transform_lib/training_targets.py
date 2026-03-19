@@ -29,7 +29,7 @@ def build_training_target_sections(
     delay_bins: int,
     max_selected_units: int,
     max_entities: int,
-    spatial_size: int,
+    location_target_size: int,
 ) -> dict[str, list[dict[str, Any]]]:
     return {
         "targetSections": [
@@ -38,8 +38,8 @@ def build_training_target_sections(
             {"name": "queueOneHot", "shape": [2], "dtype": "int32"},
             {"name": "unitsOneHot", "shape": [max_selected_units, max_entities], "dtype": "int32"},
             {"name": "targetEntityOneHot", "shape": [max_entities], "dtype": "int32"},
-            {"name": "targetLocationOneHot", "shape": [spatial_size, spatial_size], "dtype": "int32"},
-            {"name": "targetLocation2OneHot", "shape": [spatial_size, spatial_size], "dtype": "int32"},
+            {"name": "targetLocationOneHot", "shape": [location_target_size, location_target_size], "dtype": "int32"},
+            {"name": "targetLocation2OneHot", "shape": [location_target_size, location_target_size], "dtype": "int32"},
             {"name": "quantityValue", "shape": [1], "dtype": "int32"},
         ],
         "maskSections": [
@@ -192,7 +192,8 @@ def build_training_targets_v1(
     semantic_lookup = build_action_type_semantic_lookup(label_layout_v1)
     action_vocab_size = len(global_action_vocabulary)
     delay_bins = int(label_layout_v1.get("delayBins", LABEL_LAYOUT_V1_DELAY_BINS))
-    spatial_size = int(schema["observation"]["spatialSize"])
+    observation_spatial_size = int(schema["observation"]["spatialSize"])
+    location_target_size = int(schema["observation"].get("minimapSize", observation_spatial_size))
     max_entities = int(schema["observation"]["maxEntities"])
     max_selected_units = int(label_section_tensors["unitsIndices"].shape[1])
     sample_count = int(label_section_tensors["actionTypeId"].shape[0])
@@ -226,14 +227,14 @@ def build_training_targets_v1(
         target_location_valid,
         map_widths,
         map_heights,
-        spatial_size,
+        location_target_size,
     )
     target_location_2_one_hot = build_spatial_one_hot(
         target_location_2,
         target_location_2_valid,
         map_widths,
         map_heights,
-        spatial_size,
+        location_target_size,
     )
 
     queue_semantic_mask = build_semantic_mask_tensor(action_type_ids, semantic_lookup, "usesQueue")
@@ -295,7 +296,9 @@ def build_training_targets_v1(
         "delayBins": delay_bins,
         "maxEntities": max_entities,
         "maxSelectedUnits": max_selected_units,
-        "spatialSize": spatial_size,
+        "spatialSize": location_target_size,
+        "observationSpatialSize": observation_spatial_size,
+        "locationTargetSize": location_target_size,
         "quantityPolicy": LABEL_LAYOUT_V1_QUANTITY_POLICY,
         "supervisionPolicy": LABEL_LAYOUT_V1_SUPERVISION_POLICY,
         **build_training_target_sections(
@@ -303,12 +306,13 @@ def build_training_targets_v1(
             delay_bins=delay_bins,
             max_selected_units=max_selected_units,
             max_entities=max_entities,
-            spatial_size=spatial_size,
+            location_target_size=location_target_size,
         ),
         "notes": [
             "This sidecar expands compact canonical V1 labels into model-ready targets and masks.",
             "Action-type one-hot uses the run-global action vocabulary from the transform manifest.",
             "Spatial one-hot targets reuse the same tile-to-grid mapping as py-chronodivide features.",
+            "Location targets now use the observation minimap resolution when available, so target planes are native 64x64 on the current dataset path.",
             "Quantity stays raw integer-valued in V1 and is supervised directly through quantityValue.",
             "Loss masks are the hard supervision policy: semantic masks gate head applicability and replay-time masks gate target validity.",
             "Canonical labels remain the source of truth; these tensors are derived for training convenience.",

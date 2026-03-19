@@ -47,7 +47,8 @@ LABEL_LAYOUT_V1_SUPERVISION_POLICY = {
     "quantity": "supervise only when the action type uses quantity and quantity >= 0",
     "notes": [
         "Entity-resolution failure suppresses target-entity supervision but does not suppress valid location supervision.",
-        "Units are supervised position-by-position; unresolved selected units do not contribute loss.",
+        "Canonical V1 still stores per-slot unit targets, but model training now derives an explicit EOF sequence from those slots.",
+        "Unresolved selected units do not contribute loss, and the derived EOF is supervised only after the last valid unit slot.",
     ],
 }
 LABEL_LAYOUT_V1_ACTION_VOCAB_SCOPE = "per_replay_extract"
