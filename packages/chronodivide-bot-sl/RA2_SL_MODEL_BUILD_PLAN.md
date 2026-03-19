@@ -353,6 +353,12 @@ Recommended RA2 training protocol:
 - keep the teacher-forced pass
 - run a second unguided pass for reported metrics
 
+Current implementation state:
+
+- the trainer now logs both:
+  - teacher-forced validation loss/accuracy for checkpoint selection
+  - a separate free-running metrics pass with no teacher forcing
+
 This distinction matters because mAS does not report purely teacher-forced accuracy. It trains with teacher forcing and evaluates with a freerunning pass. That is a good pattern for RA2 as well.
 
 ## Batch Strategy

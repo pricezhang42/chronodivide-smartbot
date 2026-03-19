@@ -110,6 +110,219 @@ class RA2SLLossOutput:
     metrics: dict[str, torch.Tensor]
 
 
+def _flatten_rows(tensor: torch.Tensor) -> torch.Tensor:
+    if tensor.ndim == 0:
+        return tensor.reshape(1, 1)
+    if tensor.ndim == 1:
+        return tensor.reshape(-1, 1)
+    return tensor.reshape(-1, *tensor.shape[2:]) if tensor.ndim >= 3 else tensor.reshape(-1, tensor.shape[-1])
+
+
+def _flatten_scalar_mask(mask: torch.Tensor) -> torch.Tensor:
+    flattened = mask.reshape(-1)
+    return flattened.to(torch.bool)
+
+
+def _flatten_class_targets(one_hot: torch.Tensor) -> torch.Tensor:
+    return _one_hot_to_index(one_hot).reshape(-1)
+
+
+def _spatial_indices(one_hot: torch.Tensor, target_hw: tuple[int, int] | None = None) -> torch.Tensor:
+    if target_hw is not None:
+        one_hot = _resize_spatial_target_one_hot(one_hot, target_hw)
+    flat = one_hot.reshape(-1, one_hot.shape[-2] * one_hot.shape[-1])
+    return _one_hot_to_index(flat)
+
+
+def _build_predicted_units_targets(
+    selected_ids: torch.Tensor,
+    selected_non_eof_mask: torch.Tensor,
+    *,
+    eof_index: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if selected_ids.shape != selected_non_eof_mask.shape:
+        raise ValueError(
+            f"selected_ids and selected_non_eof_mask must match, got {tuple(selected_ids.shape)} vs {tuple(selected_non_eof_mask.shape)}."
+        )
+    *leading_shape, sequence_length = selected_ids.shape
+    flat_selected_ids = selected_ids.reshape(-1, sequence_length)
+    flat_non_eof_mask = selected_non_eof_mask.to(torch.bool).reshape(-1, sequence_length)
+    flat_target_ids = torch.full_like(flat_selected_ids, fill_value=eof_index)
+    flat_target_mask = torch.zeros_like(flat_non_eof_mask)
+    counts = flat_non_eof_mask.sum(dim=1, dtype=torch.long)
+    for row_index in range(flat_selected_ids.shape[0]):
+        count = int(counts[row_index].item())
+        if count > 0:
+            flat_target_ids[row_index, :count] = flat_selected_ids[row_index, :count]
+        if count < sequence_length:
+            flat_target_ids[row_index, count] = eof_index
+            flat_target_mask[row_index, : count + 1] = True
+    return (
+        flat_target_ids.reshape(*leading_shape, sequence_length),
+        flat_target_mask.reshape(*leading_shape, sequence_length),
+    )
+
+
+def _masked_sequence_exact_match(
+    predicted_ids: torch.Tensor,
+    predicted_mask: torch.Tensor,
+    target_ids: torch.Tensor,
+    target_mask: torch.Tensor,
+) -> torch.Tensor:
+    flat_predicted_ids = predicted_ids.reshape(-1, predicted_ids.shape[-1])
+    flat_predicted_mask = predicted_mask.to(torch.bool).reshape(-1, predicted_mask.shape[-1])
+    flat_target_ids = target_ids.reshape(-1, target_ids.shape[-1])
+    flat_target_mask = target_mask.to(torch.bool).reshape(-1, target_mask.shape[-1])
+    row_active = flat_target_mask.any(dim=1)
+    if not bool(row_active.any()):
+        return torch.tensor(1.0, device=predicted_ids.device, dtype=torch.float32)
+    ids_match = flat_predicted_ids == flat_target_ids
+    mask_match = flat_predicted_mask == flat_target_mask
+    row_match = ids_match.logical_or(~flat_target_mask).all(dim=1) & mask_match.all(dim=1)
+    return row_match[row_active].to(torch.float32).mean()
+
+
+def _masked_classification_accuracy_from_predictions(
+    predicted_ids: torch.Tensor,
+    target_ids: torch.Tensor,
+    mask: torch.Tensor,
+) -> torch.Tensor:
+    correct = (predicted_ids == target_ids).to(torch.float32)
+    return _masked_mean(correct, mask)
+
+
+def compute_ra2_sl_free_running_metrics(
+    outputs: dict[str, torch.Tensor],
+    batch: dict[str, Any],
+) -> dict[str, torch.Tensor]:
+    targets = batch["training_targets"]
+    masks = batch["training_masks"]
+    scalar_sections = batch["model_inputs"]["scalar_sections"]
+
+    action_type_targets = _flatten_class_targets(targets["actionTypeOneHot"])
+    delay_targets = _flatten_class_targets(targets["delayOneHot"])
+    queue_targets = _flatten_class_targets(targets["queueOneHot"])
+    target_entity_targets = _flatten_class_targets(targets["targetEntityOneHot"])
+    target_location_targets = _spatial_indices(targets["targetLocationOneHot"], outputs["targetLocationLogits"].shape[-2:])
+    target_location2_targets = _spatial_indices(targets["targetLocation2OneHot"], outputs["targetLocation2Logits"].shape[-2:])
+    quantity_targets = targets["quantityValue"].reshape(-1).to(torch.float32)
+
+    action_type_mask = _flatten_scalar_mask(masks["actionTypeLossMask"])
+    delay_mask = _flatten_scalar_mask(masks["delayLossMask"])
+    queue_mask = _flatten_scalar_mask(masks["queueLossMask"])
+    target_entity_mask = _flatten_scalar_mask(masks["targetEntityLossMask"])
+    target_location_mask = _flatten_scalar_mask(masks["targetLocationLossMask"])
+    target_location2_mask = _flatten_scalar_mask(masks["targetLocation2LossMask"])
+    quantity_mask = _flatten_scalar_mask(masks["quantityLossMask"])
+
+    action_type_predictions = torch.argmax(outputs["actionTypeLogits"].reshape(-1, outputs["actionTypeLogits"].shape[-1]), dim=-1)
+    delay_predictions = torch.argmax(outputs["delayLogits"].reshape(-1, outputs["delayLogits"].shape[-1]), dim=-1)
+    queue_predictions = torch.argmax(outputs["queueLogits"].reshape(-1, outputs["queueLogits"].shape[-1]), dim=-1)
+    target_entity_predictions = torch.argmax(
+        outputs["targetEntityLogits"].reshape(-1, outputs["targetEntityLogits"].shape[-1]),
+        dim=-1,
+    )
+    target_location_predictions = torch.argmax(
+        outputs["targetLocationLogits"].reshape(-1, outputs["targetLocationLogits"].shape[-2] * outputs["targetLocationLogits"].shape[-1]),
+        dim=-1,
+    )
+    target_location2_predictions = torch.argmax(
+        outputs["targetLocation2Logits"].reshape(-1, outputs["targetLocation2Logits"].shape[-2] * outputs["targetLocation2Logits"].shape[-1]),
+        dim=-1,
+    )
+    quantity_predictions = torch.round(outputs["quantityPred"].reshape(-1))
+
+    units_targets = build_units_autoregressive_targets(targets["unitsOneHot"], masks["unitsLossMask"])
+    predicted_units_target_ids, predicted_units_target_mask = _build_predicted_units_targets(
+        outputs["unitsSelectedIds"],
+        outputs["unitsSelectedMask"],
+        eof_index=units_targets.eof_index,
+    )
+    flat_predicted_units_ids = predicted_units_target_ids.reshape(-1, predicted_units_target_ids.shape[-1])
+    flat_target_units_ids = units_targets.target_ids.reshape(-1, units_targets.target_ids.shape[-1])
+    flat_units_mask = units_targets.target_mask.reshape(-1, units_targets.target_mask.shape[-1]).to(torch.bool)
+    units_token_accuracy = _masked_classification_accuracy_from_predictions(
+        flat_predicted_units_ids.reshape(-1),
+        flat_target_units_ids.reshape(-1),
+        flat_units_mask.reshape(-1),
+    )
+    units_sequence_exact_match = _masked_sequence_exact_match(
+        predicted_units_target_ids,
+        predicted_units_target_mask,
+        units_targets.target_ids,
+        units_targets.target_mask,
+    )
+
+    available_action_mask = scalar_sections.get("availableActionMask")
+    gold_action_suppressed_rate = torch.tensor(0.0, device=action_type_predictions.device, dtype=torch.float32)
+    if available_action_mask is not None:
+        flat_available_action_mask = available_action_mask.reshape(-1, available_action_mask.shape[-1])
+        valid_rows = torch.nonzero(action_type_mask, as_tuple=False).reshape(-1)
+        if valid_rows.numel() > 0:
+            suppressed = flat_available_action_mask[valid_rows, action_type_targets[valid_rows]] <= 0
+            gold_action_suppressed_rate = suppressed.to(torch.float32).mean()
+
+    row_count = action_type_targets.shape[0]
+    full_action_match = torch.ones(row_count, dtype=torch.bool, device=action_type_predictions.device)
+    full_action_match &= action_type_predictions == action_type_targets
+    full_action_match &= (~delay_mask) | (delay_predictions == delay_targets)
+    full_action_match &= (~queue_mask) | (queue_predictions == queue_targets)
+    full_action_match &= (~target_entity_mask) | (target_entity_predictions == target_entity_targets)
+    full_action_match &= (~target_location_mask) | (target_location_predictions == target_location_targets)
+    full_action_match &= (~target_location2_mask) | (target_location2_predictions == target_location2_targets)
+    full_action_match &= (~quantity_mask) | (quantity_predictions == quantity_targets)
+    flat_units_sequence_match = (
+        (
+            flat_predicted_units_ids == flat_target_units_ids
+        ).logical_or(~flat_units_mask).all(dim=1)
+        & (predicted_units_target_mask.reshape(-1, predicted_units_target_mask.shape[-1]).to(torch.bool) == flat_units_mask).all(dim=1)
+    )
+    full_action_match &= flat_units_sequence_match
+
+    metrics = {
+        "actionTypeAccuracy": _masked_classification_accuracy_from_predictions(
+            action_type_predictions,
+            action_type_targets,
+            action_type_mask,
+        ),
+        "delayAccuracy": _masked_classification_accuracy_from_predictions(
+            delay_predictions,
+            delay_targets,
+            delay_mask,
+        ),
+        "queueAccuracy": _masked_classification_accuracy_from_predictions(
+            queue_predictions,
+            queue_targets,
+            queue_mask,
+        ),
+        "unitsTokenAccuracy": units_token_accuracy,
+        "unitsSequenceExactMatch": units_sequence_exact_match,
+        "targetEntityAccuracy": _masked_classification_accuracy_from_predictions(
+            target_entity_predictions,
+            target_entity_targets,
+            target_entity_mask,
+        ),
+        "targetLocationAccuracy": _masked_classification_accuracy_from_predictions(
+            target_location_predictions,
+            target_location_targets,
+            target_location_mask,
+        ),
+        "targetLocation2Accuracy": _masked_classification_accuracy_from_predictions(
+            target_location2_predictions,
+            target_location2_targets,
+            target_location2_mask,
+        ),
+        "quantityAccuracy": _masked_classification_accuracy_from_predictions(
+            quantity_predictions,
+            quantity_targets,
+            quantity_mask,
+        ),
+        "fullActionExactMatch": _masked_mean(full_action_match.to(torch.float32), action_type_mask),
+        "goldActionSuppressedRate": gold_action_suppressed_rate,
+    }
+    return metrics
+
+
 def compute_ra2_sl_loss(
     outputs: dict[str, torch.Tensor],
     batch: dict[str, Any],

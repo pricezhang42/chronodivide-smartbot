@@ -193,7 +193,7 @@ Related design note:
   - target location accuracy
   - quantity accuracy
 - `[x]` Verify zero-loss-mask rows do not contribute to loss.
-- `[ ]` Add a separate free-running metrics path after the training-loss pass.
+- `[x]` Add a separate free-running metrics path after the training-loss pass.
 
 ## Phase 7: Training Script
 
@@ -230,7 +230,7 @@ Related design note:
 - `[x]` Confirm location heads learn non-trivial targets on a tiny subset.
 - `[x]` Confirm masked heads do not produce unstable NaNs.
 - `[x]` Confirm action-type masking does not suppress chosen gold actions.
-- `[ ]` Confirm free-running metrics can be computed without teacher forcing once enabled.
+- `[x]` Confirm free-running metrics can be computed without teacher forcing once enabled.
 
 ## Phase 9: Pinch Point Soviet Slice
 
@@ -271,7 +271,7 @@ Related design note:
 - `[x]` Add a full multi-head teacher-forced training path:
   - gold `actionType`, `delay`, `queue`, `units`, `targetEntity`, `targetLocation`, and `targetLocation2` can condition later heads when valid
   - unresolved targets do not inject teacher-forced garbage because conditioning is masked by valid supervision
-- `[ ]` Add a separate free-running evaluation forward pass.
+- `[x]` Add a separate free-running evaluation forward pass.
 - `[x]` Add a derived EOF-based autoregressive `units` head.
 - `[ ]` Add stronger autoregressive coupling between heads.
 - `[ ]` Re-evaluate whether the extra complexity improves validation.
@@ -286,4 +286,4 @@ Related design note:
 
 - `[ ]` Choose one of the next two high-value directions:
   - expand the Arab `Pinch Point LE` tensor corpus beyond the current 2-shard manifest
-  - add a separate free-running evaluation pass and compare it directly with the teacher-forced training pass
+  - compare free-running evaluation directly with the teacher-forced validation path on larger winner-only runs

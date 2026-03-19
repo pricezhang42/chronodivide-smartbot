@@ -21,7 +21,7 @@ from model_lib.dataset import (
     RA2SLSequenceWindowDataset,
     discover_model_shards,
 )
-from model_lib.losses import compute_ra2_sl_loss
+from model_lib.losses import compute_ra2_sl_free_running_metrics, compute_ra2_sl_loss
 from model_lib.model import RA2SLBaselineConfig, RA2SLBaselineModel
 
 
@@ -435,7 +435,7 @@ def run_epoch(
                 batch["model_inputs"],
                 teacher_forcing_targets=batch["training_targets"],
                 teacher_forcing_masks=batch["training_masks"],
-                teacher_forcing_mode=teacher_forcing_mode if training else "none",
+                teacher_forcing_mode=teacher_forcing_mode,
             )
             loss_output = compute_ra2_sl_loss(
                 outputs,
@@ -460,6 +460,38 @@ def run_epoch(
     metrics["samplesPerSecond"] = sample_count / elapsed_seconds
     metrics["sampleCount"] = sample_count
     return metrics
+
+
+def run_free_running_eval_epoch(
+    *,
+    model: RA2SLBaselineModel,
+    data_loader: DataLoader,
+    device: torch.device,
+) -> dict[str, float]:
+    model.eval()
+    accumulator = init_metrics_accumulator()
+    start_time = time.perf_counter()
+    with torch.no_grad():
+        for batch in data_loader:
+            batch = move_batch_to_device(batch, device)
+            outputs = model(
+                batch["model_inputs"],
+                teacher_forcing_targets=None,
+                teacher_forcing_masks=None,
+                teacher_forcing_mode="none",
+            )
+            metrics = compute_ra2_sl_free_running_metrics(outputs, batch)
+            accumulator["batch_count"] += 1.0
+            accumulator["sample_count"] += float(_count_supervised_steps(batch))
+            accumulate_metric_group(accumulator, "metric", metrics)
+
+    finalized = finalize_metrics(accumulator)
+    elapsed_seconds = max(1e-6, time.perf_counter() - start_time)
+    sample_count = accumulator.get("sample_count", 0.0)
+    finalized["epochSeconds"] = elapsed_seconds
+    finalized["samplesPerSecond"] = sample_count / elapsed_seconds
+    finalized["sampleCount"] = sample_count
+    return finalized
 
 
 def save_json(path: Path, payload: dict[str, Any]) -> None:
@@ -596,6 +628,7 @@ def main() -> None:
 
     last_train_metrics: dict[str, float] | None = None
     last_val_metrics: dict[str, float] | None = None
+    last_val_free_metrics: dict[str, float] | None = None
     for epoch in range(start_epoch, config.epochs):
         train_metrics = run_epoch(
             model=model,
@@ -607,6 +640,7 @@ def main() -> None:
             teacher_forcing_mode=config.teacher_forcing_mode,
         )
         val_metrics = None
+        val_free_metrics = None
         if val_loader is not None:
             val_metrics = run_epoch(
                 model=model,
@@ -617,16 +651,23 @@ def main() -> None:
                 action_type_class_weights=action_type_class_weights,
                 teacher_forcing_mode=config.teacher_forcing_mode,
             )
+            val_free_metrics = run_free_running_eval_epoch(
+                model=model,
+                data_loader=val_loader,
+                device=device,
+            )
 
         scheduler.step()
         last_train_metrics = train_metrics
         last_val_metrics = val_metrics
+        last_val_free_metrics = val_free_metrics
 
         summary = {
             "epoch": epoch,
             "timestamp": utc_now_iso(),
             "train": train_metrics,
             "val": val_metrics,
+            "valFree": val_free_metrics,
             "learningRate": optimizer.param_groups[0]["lr"],
         }
         with history_path.open("a", encoding="utf-8") as handle:
@@ -638,6 +679,12 @@ def main() -> None:
             + (
                 f" val_loss={val_metrics['total_loss']:.6f} val_sps={val_metrics['samplesPerSecond']:.2f}"
                 if val_metrics is not None
+                else ""
+            )
+            + (
+                f" val_free_action={val_free_metrics['metric.actionTypeAccuracy']:.4f}"
+                f" val_free_full={val_free_metrics['metric.fullActionExactMatch']:.4f}"
+                if val_free_metrics is not None
                 else ""
             )
         )
@@ -653,10 +700,10 @@ def main() -> None:
             scheduler=scheduler,
             epoch=epoch,
             train_metrics=train_metrics,
-            val_metrics=val_metrics,
-            config=config,
-            best_val_loss=best_val_loss,
-        )
+                val_metrics=val_metrics,
+                config=config,
+                best_val_loss=best_val_loss,
+            )
         if candidate_loss == best_val_loss:
             save_checkpoint(
                 path=config.checkpoint_dir / "best.pt",
@@ -691,6 +738,7 @@ def main() -> None:
         "actionTypeWeighting": action_type_weight_payload,
         "finalTrainMetrics": last_train_metrics,
         "finalValMetrics": last_val_metrics,
+        "finalValFreeMetrics": last_val_free_metrics,
     }
     save_json(config.output_dir / "training_summary.json", final_summary)
 
