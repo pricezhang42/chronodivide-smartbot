@@ -208,6 +208,10 @@ Related design note:
   - checkpoint dir
 - `[x]` Add optimizer and scheduler setup.
 - `[x]` Add checkpoint save/load.
+- `[x]` Save separate best checkpoints for:
+  - teacher-forced validation loss
+  - free-running `actionType` accuracy
+  - free-running full-action exact match
 - `[x]` Add train/val loops.
 - `[x]` Keep the training loop structured so it can later support:
   - teacher-forced training forward pass

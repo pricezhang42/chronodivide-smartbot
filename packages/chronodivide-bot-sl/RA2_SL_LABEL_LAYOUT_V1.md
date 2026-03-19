@@ -62,7 +62,7 @@ V1 recommends these supervised heads:
 - `target_location_2`
   Needed because some RA2 actions expose a second tile target.
 - `quantity`
-  Needed for queue update actions such as add, cancel, and hold.
+  Needed for item-specific queue update actions such as add, cancel, and add-next.
 
 ## Heads We Should Not Keep As Main Prediction Heads
 
@@ -98,7 +98,8 @@ The RA2 equivalent of mini-AlphaStar's raw ability space should be built from th
 - `OrderUnitsAction`
   - `Order::<orderType>::<targetMode>`
 - `UpdateQueueAction`
-  - `Queue::<queueUpdateType>::<itemName>`
+  - `Queue::<queueUpdateType>::<itemName>` for `Add` / `Cancel` / `AddNext`
+  - `Queue::<queueUpdateType>::<queueTypeName>` for `Hold` / `Resume`
 - `PlaceBuildingAction`
   - `PlaceBuilding::<buildingName>`
 - `ActivateSuperWeaponAction`
@@ -307,6 +308,10 @@ Inactive:
 
 - `quantity`
 
+### Active for `Queue::<queueUpdateType>::<queueTypeName>`
+
+- no extra argument head; `quantity` stays inactive
+
 Inactive:
 
 - `queue`
@@ -473,6 +478,9 @@ This is how the existing decoded replay actions map into the V1 heads.
 
 - `action_type`: `Queue::<queueUpdateType>::<itemName>`
 - `quantity`: replay quantity
+
+- `action_type`: `Queue::<queueUpdateType>::<queueTypeName>`
+- `quantity`: unused for `Hold` / `Resume`
 
 ### `PlaceBuildingAction`
 

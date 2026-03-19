@@ -103,6 +103,8 @@ export const QUEUE_UPDATE_TYPE_NAMES = {
   0: "Add",
   1: "Cancel",
   2: "Hold",
+  3: "Resume",
+  4: "AddNext",
 };
 
 export const SUPER_WEAPON_TYPE_NAMES = {

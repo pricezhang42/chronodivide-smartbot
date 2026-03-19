@@ -15,10 +15,11 @@ from __future__ import annotations
 from typing import Any
 
 
-STATIC_ACTION_DICT_VERSION = "ra2_sl_v4"
+STATIC_ACTION_DICT_VERSION = "ra2_sl_v5"
 UNKNOWN_ACTION_TYPE_NAME = "<unk>"
 UNKNOWN_QUEUE_UPDATE_TYPE_NAME = "<unk_queue_update>"
 UNKNOWN_QUEUE_ITEM_NAME = "<unk_item>"
+UNKNOWN_QUEUE_TYPE_NAME = "<unk_queue_type>"
 UNKNOWN_BUILDING_NAME = "<unk_building>"
 UNKNOWN_SUPER_WEAPON_NAME = "<unk_super_weapon>"
 
@@ -48,10 +49,20 @@ QUEUE_UPDATE_TYPE_NAMES = [
     "Add",
     "Cancel",
     "Hold",
-    "QueueUpdateType_3",
-    "QueueUpdateType_4",
+    "Resume",
+    "AddNext",
     UNKNOWN_QUEUE_UPDATE_TYPE_NAME,
 ]
+QUEUE_TYPE_NAMES = [
+    "Structures",
+    "Armory",
+    "Infantry",
+    "Vehicles",
+    "Aircrafts",
+    "Ships",
+]
+QUEUE_ITEM_UPDATE_TYPE_NAMES = {"Add", "Cancel", "AddNext"}
+QUEUE_TYPE_UPDATE_TYPE_NAMES = {"Hold", "Resume"}
 SUPER_WEAPON_TYPE_NAMES = [
     "MultiMissile",
     "IronCurtain",
@@ -189,9 +200,14 @@ def build_action_type_names() -> list[str]:
             names.append(f"Order::{order_type_name}::{target_mode_name}")
 
     for queue_update_type_name in QUEUE_UPDATE_TYPE_NAMES:
-        names.append(f"Queue::{queue_update_type_name}::{UNKNOWN_QUEUE_ITEM_NAME}")
-        for item_name in QUEUE_ITEM_NAMES:
-            names.append(f"Queue::{queue_update_type_name}::{item_name}")
+        if queue_update_type_name in QUEUE_TYPE_UPDATE_TYPE_NAMES:
+            names.append(f"Queue::{queue_update_type_name}::{UNKNOWN_QUEUE_TYPE_NAME}")
+            for queue_type_name in QUEUE_TYPE_NAMES:
+                names.append(f"Queue::{queue_update_type_name}::{queue_type_name}")
+        else:
+            names.append(f"Queue::{queue_update_type_name}::{UNKNOWN_QUEUE_ITEM_NAME}")
+            for item_name in QUEUE_ITEM_NAMES:
+                names.append(f"Queue::{queue_update_type_name}::{item_name}")
 
     names.append(f"PlaceBuilding::{UNKNOWN_BUILDING_NAME}")
     for building_name in PLACE_BUILDING_NAMES:
@@ -264,7 +280,9 @@ def build_action_info(name: str) -> dict[str, Any]:
         )
     elif name.startswith("Queue::"):
         family = "update_queue"
-        semantic_mask = _semantic_mask(uses_quantity=True)
+        parts = name.split("::", 2)
+        queue_update_type_name = parts[1] if len(parts) >= 2 else UNKNOWN_QUEUE_UPDATE_TYPE_NAME
+        semantic_mask = _semantic_mask(uses_quantity=queue_update_type_name in QUEUE_ITEM_UPDATE_TYPE_NAMES)
     elif name.startswith("PlaceBuilding::"):
         family = "place_building"
         semantic_mask = _semantic_mask(uses_target_location=True)
@@ -303,6 +321,7 @@ def build_observed_action_type_name(
     order_type_name: str | None = None,
     target_mode_name: str | None = None,
     queue_update_type_name: str | None = None,
+    queue_type_name: str | None = None,
     item_name: str | None = None,
     building_name: str | None = None,
     super_weapon_name: str | None = None,
@@ -320,6 +339,12 @@ def build_observed_action_type_name(
             queue_update_type_name,
             UNKNOWN_QUEUE_UPDATE_TYPE_NAME,
         )
+        if normalized_queue_update_type in QUEUE_TYPE_UPDATE_TYPE_NAMES:
+            normalized_queue_type_name = normalize_action_type_component(
+                queue_type_name,
+                UNKNOWN_QUEUE_TYPE_NAME,
+            )
+            return f"Queue::{normalized_queue_update_type}::{normalized_queue_type_name}"
         normalized_item_name = normalize_action_type_component(item_name, UNKNOWN_QUEUE_ITEM_NAME)
         return f"Queue::{normalized_queue_update_type}::{normalized_item_name}"
 
@@ -365,7 +390,12 @@ def canonicalize_action_type_name(action_type_name: str | None) -> str:
     if action_type_name.startswith("Queue::"):
         parts = action_type_name.split("::", 2)
         if len(parts) == 3 and parts[1] in QUEUE_UPDATE_TYPE_NAMES:
-            fallback_name = f"Queue::{parts[1]}::{UNKNOWN_QUEUE_ITEM_NAME}"
+            fallback_suffix = (
+                UNKNOWN_QUEUE_TYPE_NAME
+                if parts[1] in QUEUE_TYPE_UPDATE_TYPE_NAMES
+                else UNKNOWN_QUEUE_ITEM_NAME
+            )
+            fallback_name = f"Queue::{parts[1]}::{fallback_suffix}"
             if fallback_name in ACTION_TYPE_NAME_TO_ID:
                 return fallback_name
         fallback_name = f"Queue::{UNKNOWN_QUEUE_UPDATE_TYPE_NAME}::{UNKNOWN_QUEUE_ITEM_NAME}"

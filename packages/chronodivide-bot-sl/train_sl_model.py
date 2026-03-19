@@ -508,8 +508,10 @@ def save_checkpoint(
     epoch: int,
     train_metrics: dict[str, float],
     val_metrics: dict[str, float] | None,
+    val_free_metrics: dict[str, float] | None,
     config: TrainConfig,
     best_val_loss: float | None,
+    best_checkpoint_metrics: dict[str, dict[str, float | int | None]],
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -520,8 +522,10 @@ def save_checkpoint(
             "scheduler": scheduler.state_dict(),
             "train_metrics": train_metrics,
             "val_metrics": val_metrics,
+            "val_free_metrics": val_free_metrics,
             "config": asdict(config),
             "best_val_loss": best_val_loss,
+            "best_checkpoint_metrics": best_checkpoint_metrics,
             "savedAt": utc_now_iso(),
         },
         path,
@@ -590,6 +594,11 @@ def main() -> None:
 
     start_epoch = 0
     best_val_loss: float | None = None
+    best_checkpoint_metrics: dict[str, dict[str, float | int | None]] = {
+        "valLoss": {"value": None, "epoch": None},
+        "valFreeActionAccuracy": {"value": None, "epoch": None},
+        "valFreeFullActionExactMatch": {"value": None, "epoch": None},
+    }
     if config.resume is not None:
         checkpoint = torch.load(config.resume, map_location=device)
         model.load_state_dict(checkpoint["model"])
@@ -597,6 +606,19 @@ def main() -> None:
         scheduler.load_state_dict(checkpoint["scheduler"])
         start_epoch = int(checkpoint["epoch"]) + 1
         best_val_loss = checkpoint.get("best_val_loss")
+        saved_best_checkpoint_metrics = checkpoint.get("best_checkpoint_metrics")
+        if isinstance(saved_best_checkpoint_metrics, dict):
+            for key, value in saved_best_checkpoint_metrics.items():
+                if key in best_checkpoint_metrics and isinstance(value, dict):
+                    best_checkpoint_metrics[key] = {
+                        "value": value.get("value"),
+                        "epoch": value.get("epoch"),
+                    }
+    if best_val_loss is not None:
+        best_checkpoint_metrics["valLoss"] = {
+            "value": float(best_val_loss),
+            "epoch": best_checkpoint_metrics["valLoss"].get("epoch"),
+        }
 
     split_payload = {
         "createdAt": utc_now_iso(),
@@ -690,8 +712,41 @@ def main() -> None:
         )
 
         candidate_loss = train_metrics["total_loss"] if val_metrics is None else val_metrics["total_loss"]
-        if best_val_loss is None or candidate_loss < best_val_loss:
+        is_best_val_loss = best_val_loss is None or candidate_loss < best_val_loss
+        if is_best_val_loss:
             best_val_loss = candidate_loss
+            best_checkpoint_metrics["valLoss"] = {
+                "value": float(candidate_loss),
+                "epoch": epoch,
+            }
+
+        best_val_free_action_value = best_checkpoint_metrics["valFreeActionAccuracy"].get("value")
+        is_best_val_free_action = (
+            val_free_metrics is not None
+            and (
+                best_val_free_action_value is None
+                or float(val_free_metrics["metric.actionTypeAccuracy"]) > float(best_val_free_action_value)
+            )
+        )
+        if is_best_val_free_action and val_free_metrics is not None:
+            best_checkpoint_metrics["valFreeActionAccuracy"] = {
+                "value": float(val_free_metrics["metric.actionTypeAccuracy"]),
+                "epoch": epoch,
+            }
+
+        best_val_free_full_value = best_checkpoint_metrics["valFreeFullActionExactMatch"].get("value")
+        is_best_val_free_full = (
+            val_free_metrics is not None
+            and (
+                best_val_free_full_value is None
+                or float(val_free_metrics["metric.fullActionExactMatch"]) > float(best_val_free_full_value)
+            )
+        )
+        if is_best_val_free_full and val_free_metrics is not None:
+            best_checkpoint_metrics["valFreeFullActionExactMatch"] = {
+                "value": float(val_free_metrics["metric.fullActionExactMatch"]),
+                "epoch": epoch,
+            }
 
         save_checkpoint(
             path=config.checkpoint_dir / "latest.pt",
@@ -700,11 +755,13 @@ def main() -> None:
             scheduler=scheduler,
             epoch=epoch,
             train_metrics=train_metrics,
-                val_metrics=val_metrics,
-                config=config,
-                best_val_loss=best_val_loss,
-            )
-        if candidate_loss == best_val_loss:
+            val_metrics=val_metrics,
+            val_free_metrics=val_free_metrics,
+            config=config,
+            best_val_loss=best_val_loss,
+            best_checkpoint_metrics=best_checkpoint_metrics,
+        )
+        if is_best_val_loss:
             save_checkpoint(
                 path=config.checkpoint_dir / "best.pt",
                 model=model,
@@ -713,8 +770,51 @@ def main() -> None:
                 epoch=epoch,
                 train_metrics=train_metrics,
                 val_metrics=val_metrics,
+                val_free_metrics=val_free_metrics,
                 config=config,
                 best_val_loss=best_val_loss,
+                best_checkpoint_metrics=best_checkpoint_metrics,
+            )
+            save_checkpoint(
+                path=config.checkpoint_dir / "best_val_loss.pt",
+                model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                epoch=epoch,
+                train_metrics=train_metrics,
+                val_metrics=val_metrics,
+                val_free_metrics=val_free_metrics,
+                config=config,
+                best_val_loss=best_val_loss,
+                best_checkpoint_metrics=best_checkpoint_metrics,
+            )
+        if is_best_val_free_action:
+            save_checkpoint(
+                path=config.checkpoint_dir / "best_val_free_action.pt",
+                model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                epoch=epoch,
+                train_metrics=train_metrics,
+                val_metrics=val_metrics,
+                val_free_metrics=val_free_metrics,
+                config=config,
+                best_val_loss=best_val_loss,
+                best_checkpoint_metrics=best_checkpoint_metrics,
+            )
+        if is_best_val_free_full:
+            save_checkpoint(
+                path=config.checkpoint_dir / "best_val_free_full.pt",
+                model=model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                epoch=epoch,
+                train_metrics=train_metrics,
+                val_metrics=val_metrics,
+                val_free_metrics=val_free_metrics,
+                config=config,
+                best_val_loss=best_val_loss,
+                best_checkpoint_metrics=best_checkpoint_metrics,
             )
 
     final_summary = {
@@ -730,6 +830,7 @@ def main() -> None:
         "epochs": config.epochs,
         "checkpointDir": str(config.checkpoint_dir),
         "bestValLoss": best_val_loss,
+        "bestCheckpointMetrics": best_checkpoint_metrics,
         "windowSize": config.window_size,
         "windowStride": config.window_stride,
         "useLstmCore": config.use_lstm_core,

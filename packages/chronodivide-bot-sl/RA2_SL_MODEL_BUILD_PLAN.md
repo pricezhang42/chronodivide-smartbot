@@ -358,6 +358,10 @@ Current implementation state:
 - the trainer now logs both:
   - teacher-forced validation loss/accuracy for checkpoint selection
   - a separate free-running metrics pass with no teacher forcing
+- the trainer now saves separate checkpoint tracks for:
+  - best teacher-forced validation loss
+  - best free-running `actionType` accuracy
+  - best free-running full-action exact match
 
 This distinction matters because mAS does not report purely teacher-forced accuracy. It trains with teacher forcing and evaluates with a freerunning pass. That is a good pattern for RA2 as well.
 

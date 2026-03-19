@@ -115,6 +115,21 @@ def resolve_records(args: argparse.Namespace, tensor_dir: Path) -> list[ModelSha
     return filtered
 
 
+def build_model_config_from_checkpoint(
+    *,
+    checkpoint: dict[str, Any],
+    entity_name_vocab_size: int,
+) -> RA2SLBaselineConfig:
+    checkpoint_config = checkpoint.get("config")
+    if not isinstance(checkpoint_config, dict):
+        return RA2SLBaselineConfig(entity_name_vocab_size=entity_name_vocab_size)
+    return RA2SLBaselineConfig(
+        entity_name_vocab_size=entity_name_vocab_size,
+        use_lstm_core=bool(checkpoint_config.get("use_lstm_core", False)),
+        lstm_num_layers=int(checkpoint_config.get("lstm_num_layers", 1)),
+    )
+
+
 def infer_entity_name_vocab_size(records: list[ModelShardRecord]) -> int:
     max_size = 0
     for record in records:
@@ -256,7 +271,8 @@ def main() -> None:
 
     checkpoint = torch.load(args.checkpoint.resolve(), map_location=device, weights_only=False)
     model = RA2SLBaselineModel(
-        RA2SLBaselineConfig(
+        build_model_config_from_checkpoint(
+            checkpoint=checkpoint,
             entity_name_vocab_size=infer_entity_name_vocab_size(records),
         )
     ).to(device)

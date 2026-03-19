@@ -109,6 +109,14 @@ def get_queue_update_type_name(sample: dict[str, Any], dataset: dict[str, Any]) 
     return get_schema_name_by_id(dataset["schema"]["action"]["queueUpdateTypeNames"], queue_update_type_id)
 
 
+def get_queue_type_name(sample: dict[str, Any], dataset: dict[str, Any]) -> str | None:
+    legacy_label_tensors = get_legacy_label_tensors(sample)
+    queue_type_id = int(legacy_label_tensors["queueTypeId"][0])
+    if queue_type_id < 0:
+        return None
+    return get_schema_name_by_id(dataset["schema"]["action"]["queueTypeNames"], queue_type_id)
+
+
 def get_super_weapon_type_name(sample: dict[str, Any], dataset: dict[str, Any]) -> str | None:
     legacy_label_tensors = get_legacy_label_tensors(sample)
     super_weapon_type_id = int(legacy_label_tensors["superWeaponTypeId"][0])
@@ -127,6 +135,7 @@ def action_type_name_v1(sample: dict[str, Any], dataset: dict[str, Any]) -> str:
         order_type_name=get_order_type_name(sample, dataset),
         target_mode_name=get_target_mode_name(sample, dataset),
         queue_update_type_name=get_queue_update_type_name(sample, dataset),
+        queue_type_name=get_queue_type_name(sample, dataset),
         item_name=get_shared_name_from_token(dataset, int(legacy_label_tensors["itemNameToken"][0])),
         building_name=get_shared_name_from_token(dataset, int(legacy_label_tensors["buildingNameToken"][0])),
         super_weapon_name=get_super_weapon_type_name(sample, dataset),
@@ -163,13 +172,14 @@ def derive_action_type_semantic_mask(sample: dict[str, Any], dataset: dict[str, 
         }
 
     if raw_action_name == "UpdateQueueAction":
+        queue_update_type_name = get_queue_update_type_name(sample, dataset)
         return {
             "usesQueue": False,
             "usesUnits": False,
             "usesTargetEntity": False,
             "usesTargetLocation": False,
             "usesTargetLocation2": False,
-            "usesQuantity": True,
+            "usesQuantity": queue_update_type_name not in {"Hold", "Resume"},
         }
 
     if raw_action_name == "PlaceBuildingAction":

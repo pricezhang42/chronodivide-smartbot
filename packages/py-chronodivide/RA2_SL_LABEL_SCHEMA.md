@@ -118,6 +118,11 @@ Observed queue update types so far:
 - `0 = Add`
 - `1 = Cancel`
 - `2 = Hold`
+- `3 = Resume`
+- `4 = AddNext`
+
+`itemName` is only populated for item-specific queue updates (`Add`, `Cancel`, `AddNext`).
+For `Hold` and `Resume`, the replay action is queue-level, so `queueTypeName` is the meaningful field and `itemName` is expected to be null.
 
 ### `place_building`
 
