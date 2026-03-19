@@ -184,10 +184,35 @@ class ActionTypeHead(nn.Module):
         super().__init__()
         self.head = MLPHead(input_dim, hidden_dim, action_vocab_size, dropout)
 
-    def forward(self, latent: torch.Tensor, available_action_mask: torch.Tensor | None = None) -> torch.Tensor:
+    def forward(
+        self,
+        latent: torch.Tensor,
+        available_action_mask: torch.Tensor | None = None,
+        *,
+        gold_action_one_hot: torch.Tensor | None = None,
+        gold_action_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
         logits = self.head(latent)
         if available_action_mask is not None:
-            logits = _masked_logits(logits, available_action_mask > 0)
+            valid_mask = available_action_mask > 0
+            if gold_action_one_hot is not None:
+                gold_action_ids = _one_hot_to_index(gold_action_one_hot)
+                if gold_action_mask is None:
+                    gold_valid_mask = torch.ones_like(gold_action_ids, dtype=torch.bool)
+                else:
+                    gold_valid_mask = gold_action_mask.to(torch.bool)
+                    while gold_valid_mask.ndim > gold_action_ids.ndim:
+                        gold_valid_mask = gold_valid_mask.squeeze(-1)
+                    while gold_valid_mask.ndim < gold_action_ids.ndim:
+                        gold_valid_mask = gold_valid_mask.unsqueeze(-1)
+                flat_valid_mask = valid_mask.reshape(-1, valid_mask.shape[-1]).clone()
+                flat_gold_ids = gold_action_ids.reshape(-1)
+                flat_gold_valid = gold_valid_mask.reshape(-1)
+                valid_rows = torch.nonzero(flat_gold_valid, as_tuple=False).reshape(-1)
+                if valid_rows.numel() > 0:
+                    flat_valid_mask[valid_rows, flat_gold_ids[valid_rows]] = True
+                valid_mask = flat_valid_mask.reshape_as(valid_mask)
+            logits = _masked_logits(logits, valid_mask)
         return logits
 
 
@@ -541,7 +566,12 @@ class RA2SLPredictionHeads(nn.Module):
     ) -> dict[str, torch.Tensor]:
         autoregressive_latent = fused_latent
 
-        action_type_logits = self.action_type_head(autoregressive_latent, available_action_mask=available_action_mask)
+        action_type_logits = self.action_type_head(
+            autoregressive_latent,
+            available_action_mask=available_action_mask,
+            gold_action_one_hot=None if teacher_forcing_targets is None else teacher_forcing_targets.get("actionTypeOneHot"),
+            gold_action_mask=None if teacher_forcing_masks is None else teacher_forcing_masks.get("actionTypeLossMask"),
+        )
         action_type_teacher = (
             None
             if teacher_forcing_targets is None or not _is_teacher_forcing_enabled(teacher_forcing_mode, "action_type")

@@ -433,8 +433,8 @@ def run_epoch(
         with torch.set_grad_enabled(training):
             outputs = model(
                 batch["model_inputs"],
-                teacher_forcing_targets=batch["training_targets"] if training else None,
-                teacher_forcing_masks=batch["training_masks"] if training else None,
+                teacher_forcing_targets=batch["training_targets"],
+                teacher_forcing_masks=batch["training_masks"],
                 teacher_forcing_mode=teacher_forcing_mode if training else "none",
             )
             loss_output = compute_ra2_sl_loss(

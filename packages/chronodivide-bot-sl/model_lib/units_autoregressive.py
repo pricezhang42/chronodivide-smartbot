@@ -38,32 +38,30 @@ def build_units_autoregressive_targets(
     unit_ids = _one_hot_to_index(units_one_hot)
     loss_mask = units_loss_mask.to(torch.bool)
 
-    target_ids = torch.full(
-        (*leading_shape, max_selected_units + 1),
+    flat_unit_ids = unit_ids.reshape(-1, max_selected_units)
+    flat_loss_mask = loss_mask.reshape(-1, max_selected_units)
+    flat_target_ids = torch.full(
+        (flat_unit_ids.shape[0], max_selected_units + 1),
         fill_value=eof_index,
         dtype=torch.long,
         device=units_one_hot.device,
     )
-    target_mask = torch.zeros_like(target_ids, dtype=torch.bool)
+    flat_target_mask = torch.zeros_like(flat_target_ids, dtype=torch.bool)
 
-    target_ids[..., :max_selected_units] = unit_ids
-    target_mask[..., :max_selected_units] = loss_mask
+    supervised_counts = flat_loss_mask.sum(dim=1, dtype=torch.long)
+    for row_index in range(flat_unit_ids.shape[0]):
+        row_mask = flat_loss_mask[row_index]
+        row_count = int(supervised_counts[row_index].item())
+        if row_count <= 0:
+            continue
+        packed_unit_ids = flat_unit_ids[row_index][row_mask]
+        flat_target_ids[row_index, :row_count] = packed_unit_ids
+        flat_target_mask[row_index, :row_count] = True
+        flat_target_ids[row_index, row_count] = eof_index
+        flat_target_mask[row_index, row_count] = True
 
-    step_indices = torch.arange(max_selected_units, device=units_one_hot.device, dtype=torch.long)
-    expand_shape = (1,) * (loss_mask.ndim - 1) + (max_selected_units,)
-    step_indices = step_indices.view(expand_shape).expand_as(loss_mask)
-    last_supervised_step = torch.where(loss_mask, step_indices, -torch.ones_like(step_indices)).amax(dim=-1)
-    supervise_eof = last_supervised_step >= 0
-    eof_positions = (last_supervised_step + 1).clamp(max=max_selected_units)
-
-    flat_target_ids = target_ids.reshape(-1, max_selected_units + 1)
-    flat_target_mask = target_mask.reshape(-1, max_selected_units + 1)
-    flat_supervise_eof = supervise_eof.reshape(-1)
-    flat_eof_positions = eof_positions.reshape(-1)
-    if torch.any(flat_supervise_eof):
-        selected_rows = torch.nonzero(flat_supervise_eof, as_tuple=False).squeeze(-1)
-        flat_target_ids[selected_rows, flat_eof_positions[selected_rows]] = eof_index
-        flat_target_mask[selected_rows, flat_eof_positions[selected_rows]] = True
+    target_ids = flat_target_ids.reshape(*leading_shape, max_selected_units + 1)
+    target_mask = flat_target_mask.reshape(*leading_shape, max_selected_units + 1)
 
     non_eof_mask = target_mask & (target_ids != eof_index)
     eof_mask = target_mask & (target_ids == eof_index)
