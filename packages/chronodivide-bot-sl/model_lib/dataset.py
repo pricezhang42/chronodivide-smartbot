@@ -31,9 +31,12 @@ class ModelShardRecord:
     meta_path: Path
     sections_path: Path
     training_path: Path
+    sections_path_v2: Path | None
+    training_path_v2: Path | None
     flat_path: Path | None
     metadata: dict[str, Any]
     sample_count: int
+    sample_count_v2: int | None
     replay_path: str
     replay_game_id: str
     map_name: str
@@ -113,10 +116,32 @@ def _get_current_player_info(metadata: dict[str, Any]) -> tuple[str | None, int 
     return (None, None)
 
 
+def _extract_v2_sample_count(metadata: dict[str, Any]) -> int | None:
+    v2_sample_count = metadata.get("v2CommandSampleCount")
+    if v2_sample_count is not None:
+        return int(v2_sample_count)
+
+    structured_feature_shapes_v2 = metadata.get("structuredFeatureShapesV2", {})
+    scalar_shape = structured_feature_shapes_v2.get("scalar")
+    if isinstance(scalar_shape, list) and scalar_shape:
+        return int(scalar_shape[0])
+
+    structured_label_shapes_v2 = metadata.get("structuredLabelShapesV2", {})
+    action_family_shape = structured_label_shapes_v2.get("actionFamilyId")
+    if isinstance(action_family_shape, list) and action_family_shape:
+        return int(action_family_shape[0])
+
+    return None
+
+
 def _build_record(meta_path: Path) -> ModelShardRecord:
     metadata = json.loads(meta_path.read_text(encoding="utf-8"))
     sections_path = Path(metadata["structuredTensorPath"])
     training_path = Path(metadata["trainingTargetTensorPath"])
+    sections_path_v2_value = metadata.get("structuredV2TensorPath")
+    training_path_v2_value = metadata.get("trainingTargetTensorPathV2")
+    sections_path_v2 = Path(sections_path_v2_value) if sections_path_v2_value else None
+    training_path_v2 = Path(training_path_v2_value) if training_path_v2_value else None
     flat_path_value = metadata.get("tensorPath")
     flat_path = Path(flat_path_value) if flat_path_value else None
 
@@ -126,6 +151,10 @@ def _build_record(meta_path: Path) -> ModelShardRecord:
         raise FileNotFoundError(f"Training target sidecar is missing: {training_path}")
     if flat_path is not None and not flat_path.exists():
         raise FileNotFoundError(f"Flat tensor shard is missing: {flat_path}")
+    if sections_path_v2 is not None and not sections_path_v2.exists():
+        raise FileNotFoundError(f"Structured V2 tensor sidecar is missing: {sections_path_v2}")
+    if training_path_v2 is not None and not training_path_v2.exists():
+        raise FileNotFoundError(f"Training target V2 sidecar is missing: {training_path_v2}")
 
     country_name, side_id = _get_current_player_info(metadata)
     replay_info = metadata["replay"]
@@ -134,9 +163,12 @@ def _build_record(meta_path: Path) -> ModelShardRecord:
         meta_path=meta_path,
         sections_path=sections_path,
         training_path=training_path,
+        sections_path_v2=sections_path_v2,
+        training_path_v2=training_path_v2,
         flat_path=flat_path,
         metadata=metadata,
         sample_count=int(metadata["sampleCount"]),
+        sample_count_v2=_extract_v2_sample_count(metadata),
         replay_path=str(replay_info["path"]),
         replay_game_id=str(replay_info["gameId"]),
         map_name=str(replay_info["mapName"]),
@@ -178,16 +210,20 @@ class RA2SLSectionDataset(Dataset[dict[str, Any]]):
         self,
         shard_records: list[ModelShardRecord],
         *,
+        artifact_variant: str = "v1",
         cache_size: int | None = 2,
     ) -> None:
         if not shard_records:
             raise ValueError("RA2SLSectionDataset requires at least one shard record.")
+        if artifact_variant not in {"v1", "v2"}:
+            raise ValueError(f"artifact_variant must be 'v1' or 'v2', got {artifact_variant}.")
         self.shard_records = list(shard_records)
+        self.artifact_variant = artifact_variant
         self.cache_size = cache_size
         self._cumulative_sizes: list[int] = []
         running_total = 0
         for record in self.shard_records:
-            running_total += int(record.sample_count)
+            running_total += self._get_record_sample_count(record)
             self._cumulative_sizes.append(running_total)
         self._loaded_shards: "OrderedDict[int, _LoadedShard]" = OrderedDict()
 
@@ -197,10 +233,29 @@ class RA2SLSectionDataset(Dataset[dict[str, Any]]):
         root_dir: Path,
         *,
         shard_filter: ModelShardFilter | None = None,
+        artifact_variant: str = "v1",
         cache_size: int | None = 2,
     ) -> "RA2SLSectionDataset":
         records = discover_model_shards(root_dir, shard_filter=shard_filter)
-        return cls(records, cache_size=cache_size)
+        return cls(records, artifact_variant=artifact_variant, cache_size=cache_size)
+
+    def _resolve_artifact_paths(self, record: ModelShardRecord) -> tuple[Path, Path]:
+        if self.artifact_variant == "v1":
+            return record.sections_path, record.training_path
+        if record.sections_path_v2 is None or record.training_path_v2 is None:
+            raise FileNotFoundError(
+                f"{record.stem} does not have V2 sidecars, but artifact_variant='v2' was requested."
+            )
+        return record.sections_path_v2, record.training_path_v2
+
+    def _get_record_sample_count(self, record: ModelShardRecord) -> int:
+        if self.artifact_variant == "v1":
+            return int(record.sample_count)
+        if record.sample_count_v2 is None:
+            raise ValueError(
+                f"{record.stem} is missing v2CommandSampleCount metadata, but artifact_variant='v2' was requested."
+            )
+        return int(record.sample_count_v2)
 
     def __len__(self) -> int:
         return self._cumulative_sizes[-1]
@@ -217,7 +272,7 @@ class RA2SLSectionDataset(Dataset[dict[str, Any]]):
         return shard_index, local_index
 
     def _validate_loaded_shard(self, record: ModelShardRecord, loaded_shard: _LoadedShard) -> None:
-        expected_samples = int(record.sample_count)
+        expected_samples = self._get_record_sample_count(record)
         for section_name, tensor in loaded_shard.feature_sections.items():
             if int(tensor.shape[0]) != expected_samples:
                 raise ValueError(
@@ -246,8 +301,9 @@ class RA2SLSectionDataset(Dataset[dict[str, Any]]):
             return loaded
 
         record = self.shard_records[shard_index]
-        structured = torch.load(str(record.sections_path), map_location="cpu", weights_only=True)
-        training = torch.load(str(record.training_path), map_location="cpu", weights_only=True)
+        sections_path, training_path = self._resolve_artifact_paths(record)
+        structured = torch.load(str(sections_path), map_location="cpu", weights_only=True)
+        training = torch.load(str(training_path), map_location="cpu", weights_only=True)
         loaded = _LoadedShard(
             feature_sections=dict(structured["featureTensors"]),
             label_sections=dict(structured["labelTensors"]),
@@ -273,21 +329,25 @@ class RA2SLSectionDataset(Dataset[dict[str, Any]]):
         window_start_local_index: int | None = None,
         window_size: int | None = None,
     ) -> dict[str, Any]:
+        sections_path, training_path = self._resolve_artifact_paths(record)
         metadata: dict[str, Any] = {
             "global_index": global_index,
             "local_index": local_index,
             "shard_index": shard_index,
             "shard_stem": record.stem,
+            "artifact_variant": self.artifact_variant,
             "meta_path": str(record.meta_path),
-            "sections_path": str(record.sections_path),
-            "training_path": str(record.training_path),
+            "sections_path": str(sections_path),
+            "training_path": str(training_path),
             "replay_path": record.replay_path,
             "replay_game_id": record.replay_game_id,
             "map_name": record.map_name,
             "player_name": record.player_name,
             "player_country_name": record.player_country_name,
             "player_side_id": record.player_side_id,
-            "sample_count": record.sample_count,
+            "sample_count": self._get_record_sample_count(record),
+            "sample_count_v1": int(record.sample_count),
+            "sample_count_v2": None if record.sample_count_v2 is None else int(record.sample_count_v2),
         }
         if window_start_local_index is not None and window_size is not None:
             metadata["window_start_local_index"] = window_start_local_index
@@ -353,18 +413,19 @@ class RA2SLSequenceWindowDataset(RA2SLSectionDataset):
         *,
         window_size: int,
         window_stride: int = 1,
+        artifact_variant: str = "v1",
         cache_size: int | None = 2,
     ) -> None:
         if window_size <= 0:
             raise ValueError(f"window_size must be positive, got {window_size}.")
         if window_stride <= 0:
             raise ValueError(f"window_stride must be positive, got {window_stride}.")
-        super().__init__(shard_records, cache_size=cache_size)
+        super().__init__(shard_records, artifact_variant=artifact_variant, cache_size=cache_size)
         self.window_size = int(window_size)
         self.window_stride = int(window_stride)
         self._window_index: list[tuple[int, int]] = []
         for shard_index, record in enumerate(self.shard_records):
-            sample_count = int(record.sample_count)
+            sample_count = self._get_record_sample_count(record)
             if sample_count < self.window_size:
                 continue
             max_start = sample_count - self.window_size
@@ -384,6 +445,7 @@ class RA2SLSequenceWindowDataset(RA2SLSectionDataset):
         window_size: int,
         window_stride: int = 1,
         shard_filter: ModelShardFilter | None = None,
+        artifact_variant: str = "v1",
         cache_size: int | None = 2,
     ) -> "RA2SLSequenceWindowDataset":
         records = discover_model_shards(root_dir, shard_filter=shard_filter)
@@ -391,6 +453,7 @@ class RA2SLSequenceWindowDataset(RA2SLSectionDataset):
             records,
             window_size=window_size,
             window_stride=window_stride,
+            artifact_variant=artifact_variant,
             cache_size=cache_size,
         )
 

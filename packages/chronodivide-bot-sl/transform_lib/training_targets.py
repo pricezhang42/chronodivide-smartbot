@@ -11,8 +11,15 @@ from transform_lib.common import (
     LABEL_LAYOUT_V1_QUANTITY_POLICY,
     LABEL_LAYOUT_V1_SUPERVISION_POLICY,
     LABEL_LAYOUT_V1_VERSION,
+    LABEL_LAYOUT_V2_VERSION,
     TRAINING_TARGETS_V1_VERSION,
+    TRAINING_TARGETS_V2_VERSION,
     TransformConfig,
+)
+from transform_lib.label_layout_v2 import (
+    LABEL_LAYOUT_V2_ACTION_FAMILIES,
+    LABEL_LAYOUT_V2_ACTION_FAMILY_TO_ID,
+    LABEL_LAYOUT_V2_QUEUE_UPDATE_TYPES,
 )
 
 
@@ -55,6 +62,69 @@ def build_training_target_sections(
             {"name": "unitsSequenceMask", "shape": [max_selected_units], "dtype": "int32"},
             {"name": "unitsResolvedMask", "shape": [max_selected_units], "dtype": "int32"},
             {"name": "unitsLossMask", "shape": [max_selected_units], "dtype": "int32"},
+            {"name": "targetEntityResolvedMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetEntityLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocationValidMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocationLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocation2ValidMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocation2LossMask", "shape": [1], "dtype": "int32"},
+            {"name": "quantityLossMask", "shape": [1], "dtype": "int32"},
+        ],
+    }
+
+
+def build_training_target_sections_v2(
+    *,
+    action_family_count: int,
+    delay_bins: int,
+    order_type_count: int,
+    target_mode_count: int,
+    queue_update_type_count: int,
+    buildable_object_vocab_size: int,
+    super_weapon_type_count: int,
+    max_selected_units: int,
+    max_entities: int,
+    location_target_size: int,
+) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "targetSections": [
+            {"name": "actionFamilyOneHot", "shape": [action_family_count], "dtype": "int32"},
+            {"name": "delayOneHot", "shape": [delay_bins], "dtype": "int32"},
+            {"name": "orderTypeOneHot", "shape": [order_type_count], "dtype": "int32"},
+            {"name": "targetModeOneHot", "shape": [target_mode_count], "dtype": "int32"},
+            {"name": "queueFlagOneHot", "shape": [2], "dtype": "int32"},
+            {"name": "queueUpdateTypeOneHot", "shape": [queue_update_type_count], "dtype": "int32"},
+            {"name": "buildableObjectOneHot", "shape": [buildable_object_vocab_size], "dtype": "int32"},
+            {"name": "superWeaponTypeOneHot", "shape": [super_weapon_type_count], "dtype": "int32"},
+            {"name": "commandedUnitsOneHot", "shape": [max_selected_units, max_entities], "dtype": "int32"},
+            {"name": "targetEntityOneHot", "shape": [max_entities], "dtype": "int32"},
+            {"name": "targetLocationOneHot", "shape": [location_target_size, location_target_size], "dtype": "int32"},
+            {"name": "targetLocation2OneHot", "shape": [location_target_size, location_target_size], "dtype": "int32"},
+            {"name": "quantityValue", "shape": [1], "dtype": "int32"},
+        ],
+        "maskSections": [
+            {"name": "actionFamilyLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "delayLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "orderTypeSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetModeSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "queueFlagSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "queueUpdateTypeSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "buildableObjectSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "superWeaponTypeSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "commandedUnitsSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetEntitySemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocationSemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetLocation2SemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "quantitySemanticMask", "shape": [1], "dtype": "int32"},
+            {"name": "orderTypeLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "targetModeLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "queueFlagLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "queueUpdateTypeLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "buildableObjectLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "superWeaponTypeLossMask", "shape": [1], "dtype": "int32"},
+            {"name": "commandedUnitsSequenceMask", "shape": [max_selected_units], "dtype": "int32"},
+            {"name": "commandedUnitsResolvedMask", "shape": [max_selected_units], "dtype": "int32"},
+            {"name": "commandedUnitsLossMask", "shape": [max_selected_units], "dtype": "int32"},
             {"name": "targetEntityResolvedMask", "shape": [1], "dtype": "int32"},
             {"name": "targetEntityLossMask", "shape": [1], "dtype": "int32"},
             {"name": "targetLocationValidMask", "shape": [1], "dtype": "int32"},
@@ -340,6 +410,237 @@ def build_training_targets_v1(
     return training_targets, training_masks, training_schema
 
 
+def build_training_targets_v2(
+    feature_section_tensors: dict[str, torch.Tensor],
+    label_section_tensors: dict[str, torch.Tensor],
+    metadata: dict[str, Any],
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, Any]]:
+    schema = metadata["schema"]
+    label_layout_v2 = metadata.get("labelLayoutV2", {})
+    delay_bins = int(label_layout_v2.get("delayBins", LABEL_LAYOUT_V1_DELAY_BINS))
+    observation_spatial_size = int(schema["observation"]["spatialSize"])
+    location_target_size = int(schema["observation"].get("minimapSize", observation_spatial_size))
+    max_entities = int(schema["observation"]["maxEntities"])
+    max_commanded_units = int(label_section_tensors["commandedUnitsIndices"].shape[1])
+    sample_count = int(label_section_tensors["actionFamilyId"].shape[0])
+    scalar_tensor = feature_section_tensors["scalar"]
+    map_width_index = get_observation_scalar_index(schema, "map_width")
+    map_height_index = get_observation_scalar_index(schema, "map_height")
+    map_widths = scalar_tensor[:, map_width_index]
+    map_heights = scalar_tensor[:, map_height_index]
+
+    order_type_count = int(label_layout_v2.get("orderTypeCount", 0))
+    target_mode_count = int(label_layout_v2.get("targetModeCount", 0))
+    queue_update_type_count = len(LABEL_LAYOUT_V2_QUEUE_UPDATE_TYPES)
+    buildable_object_vocab_size = int(label_layout_v2.get("buildableObjectVocabularySize", 0))
+    super_weapon_type_count = int(label_layout_v2.get("superWeaponTypeCount", 0))
+
+    action_family_ids = label_section_tensors["actionFamilyId"].squeeze(1).to(torch.int64)
+    delay_bins_tensor = label_section_tensors["delayBin"].squeeze(1).to(torch.int64)
+    order_type_ids = label_section_tensors["orderTypeId"].squeeze(1).to(torch.int64)
+    target_mode_ids = label_section_tensors["targetModeId"].squeeze(1).to(torch.int64)
+    queue_flag_tensor = label_section_tensors["queueFlag"].squeeze(1).to(torch.int64)
+    queue_update_type_ids = label_section_tensors["queueUpdateTypeId"].squeeze(1).to(torch.int64)
+    buildable_object_tokens = label_section_tensors["buildableObjectToken"].squeeze(1).to(torch.int64)
+    super_weapon_type_ids = label_section_tensors["superWeaponTypeId"].squeeze(1).to(torch.int64)
+    commanded_units_indices = label_section_tensors["commandedUnitsIndices"].to(torch.int64)
+    commanded_units_sequence_mask = label_section_tensors["commandedUnitsMask"].to(torch.int32)
+    commanded_units_resolved_mask = label_section_tensors["commandedUnitsResolvedMask"].to(torch.int32)
+    target_entity_indices = label_section_tensors["targetEntityIndex"].squeeze(1).to(torch.int64)
+    target_entity_resolved = label_section_tensors["targetEntityResolved"].to(torch.int32)
+    target_location = label_section_tensors["targetLocation"].to(torch.int64)
+    target_location_valid = label_section_tensors["targetLocationValid"].to(torch.int32)
+    target_location_2 = label_section_tensors["targetLocation2"].to(torch.int64)
+    target_location_2_valid = label_section_tensors["targetLocation2Valid"].to(torch.int32)
+    quantity_value = label_section_tensors["quantity"].to(torch.int32)
+
+    order_family_id = LABEL_LAYOUT_V2_ACTION_FAMILY_TO_ID["Order"]
+    queue_family_id = LABEL_LAYOUT_V2_ACTION_FAMILY_TO_ID["Queue"]
+    place_building_family_id = LABEL_LAYOUT_V2_ACTION_FAMILY_TO_ID["PlaceBuilding"]
+    super_weapon_family_id = LABEL_LAYOUT_V2_ACTION_FAMILY_TO_ID["ActivateSuperWeapon"]
+    sell_family_id = LABEL_LAYOUT_V2_ACTION_FAMILY_TO_ID["SellObject"]
+    toggle_repair_family_id = LABEL_LAYOUT_V2_ACTION_FAMILY_TO_ID["ToggleRepair"]
+
+    target_mode_names = list(schema.get("action", {}).get("targetModes", []))
+    target_mode_id_by_name = {name: index for index, name in enumerate(target_mode_names)}
+    tile_target_mode_ids = {
+        target_mode_id_by_name[name]
+        for name in ("tile", "ore_tile")
+        if name in target_mode_id_by_name
+    }
+    object_target_mode_id = target_mode_id_by_name.get("object", -999)
+
+    order_active = (action_family_ids == order_family_id)
+    queue_active = (action_family_ids == queue_family_id)
+    place_building_active = (action_family_ids == place_building_family_id)
+    super_weapon_active = (action_family_ids == super_weapon_family_id)
+    sell_or_toggle_active = (action_family_ids == sell_family_id) | (action_family_ids == toggle_repair_family_id)
+
+    target_mode_tile_active = torch.zeros_like(order_active)
+    for target_mode_id in tile_target_mode_ids:
+        target_mode_tile_active = target_mode_tile_active | (target_mode_ids == target_mode_id)
+    target_mode_object_active = target_mode_ids == object_target_mode_id
+
+    order_type_semantic_mask = order_active.to(torch.int32).unsqueeze(1)
+    target_mode_semantic_mask = order_active.to(torch.int32).unsqueeze(1)
+    queue_flag_semantic_mask = order_active.to(torch.int32).unsqueeze(1)
+    queue_update_type_semantic_mask = queue_active.to(torch.int32).unsqueeze(1)
+    buildable_object_semantic_mask = (queue_active | place_building_active).to(torch.int32).unsqueeze(1)
+    super_weapon_type_semantic_mask = super_weapon_active.to(torch.int32).unsqueeze(1)
+    commanded_units_semantic_mask = order_active.to(torch.int32).unsqueeze(1)
+    target_entity_semantic_mask = ((order_active & target_mode_object_active) | sell_or_toggle_active).to(torch.int32).unsqueeze(1)
+    target_location_semantic_mask = ((order_active & target_mode_tile_active) | place_building_active | super_weapon_active).to(torch.int32).unsqueeze(1)
+    target_location_2_semantic_mask = super_weapon_active.to(torch.int32).unsqueeze(1)
+    quantity_semantic_mask = queue_active.to(torch.int32).unsqueeze(1)
+
+    action_family_one_hot = build_one_hot_matrix(action_family_ids, len(LABEL_LAYOUT_V2_ACTION_FAMILIES))
+    delay_one_hot = build_one_hot_matrix(delay_bins_tensor, delay_bins)
+    order_type_one_hot = build_one_hot_matrix(order_type_ids, order_type_count)
+    target_mode_one_hot = build_one_hot_matrix(target_mode_ids, target_mode_count)
+    queue_flag_one_hot = build_one_hot_matrix(queue_flag_tensor, 2)
+    queue_update_type_one_hot = build_one_hot_matrix(queue_update_type_ids, queue_update_type_count)
+    buildable_object_one_hot = build_one_hot_matrix(buildable_object_tokens, buildable_object_vocab_size)
+    super_weapon_type_one_hot = build_one_hot_matrix(super_weapon_type_ids, super_weapon_type_count)
+    commanded_units_one_hot = build_one_hot_sequence(commanded_units_indices, max_entities)
+    target_entity_one_hot = build_one_hot_matrix(target_entity_indices, max_entities)
+    target_location_one_hot = build_spatial_one_hot(
+        target_location,
+        target_location_valid,
+        map_widths,
+        map_heights,
+        location_target_size,
+    )
+    target_location_2_one_hot = build_spatial_one_hot(
+        target_location_2,
+        target_location_2_valid,
+        map_widths,
+        map_heights,
+        location_target_size,
+    )
+
+    action_family_loss_mask = (
+        (action_family_ids >= 0) & (action_family_ids < len(LABEL_LAYOUT_V2_ACTION_FAMILIES))
+    ).to(torch.int32).unsqueeze(1)
+    delay_loss_mask = ((delay_bins_tensor >= 0) & (delay_bins_tensor < delay_bins)).to(torch.int32).unsqueeze(1)
+    order_type_loss_mask = order_type_semantic_mask * ((order_type_ids >= 0) & (order_type_ids < order_type_count)).to(torch.int32).unsqueeze(1)
+    target_mode_loss_mask = target_mode_semantic_mask * ((target_mode_ids >= 0) & (target_mode_ids < target_mode_count)).to(torch.int32).unsqueeze(1)
+    queue_flag_loss_mask = queue_flag_semantic_mask * ((queue_flag_tensor >= 0) & (queue_flag_tensor < 2)).to(torch.int32).unsqueeze(1)
+    queue_update_type_loss_mask = queue_update_type_semantic_mask * ((queue_update_type_ids >= 0) & (queue_update_type_ids < queue_update_type_count)).to(torch.int32).unsqueeze(1)
+    buildable_object_loss_mask = buildable_object_semantic_mask * (
+        (buildable_object_tokens >= 0) & (buildable_object_tokens < buildable_object_vocab_size)
+    ).to(torch.int32).unsqueeze(1)
+    super_weapon_type_loss_mask = super_weapon_type_semantic_mask * (
+        (super_weapon_type_ids >= 0) & (super_weapon_type_ids < super_weapon_type_count)
+    ).to(torch.int32).unsqueeze(1)
+    commanded_units_loss_mask = commanded_units_semantic_mask * commanded_units_sequence_mask * commanded_units_resolved_mask
+    target_entity_loss_mask = target_entity_semantic_mask * target_entity_resolved
+    target_location_loss_mask = target_location_semantic_mask * target_location_valid
+    target_location_2_loss_mask = target_location_2_semantic_mask * target_location_2_valid
+    quantity_loss_mask = quantity_semantic_mask * (quantity_value >= 0).to(torch.int32)
+
+    training_targets = {
+        "actionFamilyOneHot": action_family_one_hot,
+        "delayOneHot": delay_one_hot,
+        "orderTypeOneHot": order_type_one_hot,
+        "targetModeOneHot": target_mode_one_hot,
+        "queueFlagOneHot": queue_flag_one_hot,
+        "queueUpdateTypeOneHot": queue_update_type_one_hot,
+        "buildableObjectOneHot": buildable_object_one_hot,
+        "superWeaponTypeOneHot": super_weapon_type_one_hot,
+        "commandedUnitsOneHot": commanded_units_one_hot,
+        "targetEntityOneHot": target_entity_one_hot,
+        "targetLocationOneHot": target_location_one_hot,
+        "targetLocation2OneHot": target_location_2_one_hot,
+        "quantityValue": quantity_value,
+    }
+    training_masks = {
+        "actionFamilyLossMask": action_family_loss_mask,
+        "delayLossMask": delay_loss_mask,
+        "orderTypeSemanticMask": order_type_semantic_mask,
+        "targetModeSemanticMask": target_mode_semantic_mask,
+        "queueFlagSemanticMask": queue_flag_semantic_mask,
+        "queueUpdateTypeSemanticMask": queue_update_type_semantic_mask,
+        "buildableObjectSemanticMask": buildable_object_semantic_mask,
+        "superWeaponTypeSemanticMask": super_weapon_type_semantic_mask,
+        "commandedUnitsSemanticMask": commanded_units_semantic_mask,
+        "targetEntitySemanticMask": target_entity_semantic_mask,
+        "targetLocationSemanticMask": target_location_semantic_mask,
+        "targetLocation2SemanticMask": target_location_2_semantic_mask,
+        "quantitySemanticMask": quantity_semantic_mask,
+        "orderTypeLossMask": order_type_loss_mask,
+        "targetModeLossMask": target_mode_loss_mask,
+        "queueFlagLossMask": queue_flag_loss_mask,
+        "queueUpdateTypeLossMask": queue_update_type_loss_mask,
+        "buildableObjectLossMask": buildable_object_loss_mask,
+        "superWeaponTypeLossMask": super_weapon_type_loss_mask,
+        "commandedUnitsSequenceMask": commanded_units_sequence_mask,
+        "commandedUnitsResolvedMask": commanded_units_resolved_mask,
+        "commandedUnitsLossMask": commanded_units_loss_mask,
+        "targetEntityResolvedMask": target_entity_resolved,
+        "targetEntityLossMask": target_entity_loss_mask,
+        "targetLocationValidMask": target_location_valid,
+        "targetLocationLossMask": target_location_loss_mask,
+        "targetLocation2ValidMask": target_location_2_valid,
+        "targetLocation2LossMask": target_location_2_loss_mask,
+        "quantityLossMask": quantity_loss_mask,
+    }
+
+    training_schema = {
+        "version": TRAINING_TARGETS_V2_VERSION,
+        "sourceCanonicalLabelVersion": LABEL_LAYOUT_V2_VERSION,
+        "actionFamilyCount": len(LABEL_LAYOUT_V2_ACTION_FAMILIES),
+        "delayBins": delay_bins,
+        "orderTypeCount": order_type_count,
+        "targetModeCount": target_mode_count,
+        "queueUpdateTypeCount": queue_update_type_count,
+        "buildableObjectVocabularySize": buildable_object_vocab_size,
+        "superWeaponTypeCount": super_weapon_type_count,
+        "maxEntities": max_entities,
+        "maxCommandedUnits": max_commanded_units,
+        "spatialSize": location_target_size,
+        "observationSpatialSize": observation_spatial_size,
+        "locationTargetSize": location_target_size,
+        **build_training_target_sections_v2(
+            action_family_count=len(LABEL_LAYOUT_V2_ACTION_FAMILIES),
+            delay_bins=delay_bins,
+            order_type_count=order_type_count,
+            target_mode_count=target_mode_count,
+            queue_update_type_count=queue_update_type_count,
+            buildable_object_vocab_size=buildable_object_vocab_size,
+            super_weapon_type_count=super_weapon_type_count,
+            max_selected_units=max_commanded_units,
+            max_entities=max_entities,
+            location_target_size=location_target_size,
+        ),
+        "notes": [
+            "This sidecar expands canonical V2 labels into hierarchical model-ready targets and masks.",
+            "Standalone SelectUnitsAction is folded out before these targets are derived.",
+            "Queue Hold and Resume are excluded from the current-stage V2 supervised action space.",
+            "Buildable object supervision is shared by queue item actions and PlaceBuilding.",
+        ],
+    }
+
+    replay_name = Path(str(metadata["replay"]["path"])).name
+    player_name = str(metadata["playerName"])
+    validate_tensor_section_shapes(
+        training_targets,
+        training_schema["targetSections"],
+        "trainingTargetsV2",
+        replay_name,
+        player_name,
+        sample_count,
+    )
+    validate_tensor_section_shapes(
+        training_masks,
+        training_schema["maskSections"],
+        "trainingMasksV2",
+        replay_name,
+        player_name,
+        sample_count,
+    )
+    return training_targets, training_masks, training_schema
+
+
 def finalize_training_target_sidecars(
     config: TransformConfig,
     results: list[dict[str, Any]],
@@ -392,3 +693,43 @@ def finalize_training_target_sidecars(
                 json.dump(metadata, handle, indent=2)
 
         result["trainingTargetTensorPath"] = str(training_tensor_path)
+        structured_v2_tensor_path = result.get("structuredV2TensorPath")
+        training_v2_tensor_path = result.get("trainingTargetTensorPathV2")
+        if structured_v2_tensor_path:
+            structured_v2_path = Path(str(structured_v2_tensor_path))
+            training_v2_path = (
+                Path(str(training_v2_tensor_path))
+                if training_v2_tensor_path
+                else Path(str(result["tensorPath"])).with_suffix(".v2.training.pt")
+            )
+            should_write_training_v2 = config.overwrite or not training_v2_path.exists()
+            if should_write_training_v2 and structured_v2_path.exists():
+                structured_v2_payload = torch.load(structured_v2_path, map_location="cpu", weights_only=True)
+                with metadata_file.open("r", encoding="utf-8") as handle:
+                    metadata = json.load(handle)
+
+                training_targets_v2, training_masks_v2, training_schema_v2 = build_training_targets_v2(
+                    structured_v2_payload["featureTensors"],
+                    structured_v2_payload["labelTensors"],
+                    metadata,
+                )
+                torch.save(
+                    {
+                        "trainingTargets": training_targets_v2,
+                        "trainingMasks": training_masks_v2,
+                        "sampleContext": structured_v2_payload.get("sampleContext", {}),
+                    },
+                    training_v2_path,
+                )
+                metadata["trainingTargetTensorPathV2"] = str(training_v2_path)
+                metadata["trainingTargetsV2"] = training_schema_v2
+                metadata["structuredTrainingTargetShapesV2"] = {
+                    name: list(tensor.shape) for name, tensor in training_targets_v2.items()
+                }
+                metadata["structuredTrainingMaskShapesV2"] = {
+                    name: list(tensor.shape) for name, tensor in training_masks_v2.items()
+                }
+                with metadata_file.open("w", encoding="utf-8") as handle:
+                    json.dump(metadata, handle, indent=2)
+
+            result["trainingTargetTensorPathV2"] = str(training_v2_path)

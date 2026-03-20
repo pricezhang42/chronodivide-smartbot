@@ -22,6 +22,7 @@ UNKNOWN_QUEUE_ITEM_NAME = "<unk_item>"
 UNKNOWN_QUEUE_TYPE_NAME = "<unk_queue_type>"
 UNKNOWN_BUILDING_NAME = "<unk_building>"
 UNKNOWN_SUPER_WEAPON_NAME = "<unk_super_weapon>"
+UNKNOWN_BUILDABLE_OBJECT_NAME = "<unk_buildable_object>"
 
 TARGET_MODE_NAMES = ["none", "tile", "object", "ore_tile"]
 ORDER_TYPE_NAMES = [
@@ -179,6 +180,12 @@ PLACE_BUILDING_NAMES = sorted(
         "NAWEAP",
     ]
 )
+BUILDABLE_OBJECT_NAMES = [
+    UNKNOWN_BUILDABLE_OBJECT_NAME,
+    *sorted(set(QUEUE_ITEM_NAMES) | set(PLACE_BUILDING_NAMES)),
+]
+BUILDABLE_OBJECT_ID_TO_NAME = {index: name for index, name in enumerate(BUILDABLE_OBJECT_NAMES)}
+BUILDABLE_OBJECT_NAME_TO_ID = {name: index for index, name in BUILDABLE_OBJECT_ID_TO_NAME.items()}
 
 BASE_ACTION_NAMES = [
     UNKNOWN_ACTION_TYPE_NAME,

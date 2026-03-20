@@ -48,6 +48,11 @@ from transform_lib.action_labels import (
     build_global_action_type_vocabulary,
     register_dataset_action_types_globally,
 )
+from transform_lib.label_layout_v2 import (
+    augment_dataset_with_label_layout_v2_preview,
+    build_label_layout_v2_metadata,
+    build_player_v2_canonical_samples,
+)
 from transform_lib.common import (
     PROJECT_ROOT,
     TransformConfig,
@@ -322,6 +327,7 @@ def write_player_shard(
     replay_path: Path,
     dataset: dict[str, Any],
     player_name: str,
+    source_samples: list[dict[str, Any]],
     samples: list[dict[str, Any]],
     filter_stats: dict[str, Any],
     player_counts: dict[str, Any],
@@ -329,6 +335,7 @@ def write_player_shard(
     output_stem = player_output_stem(replay_path, player_name)
     tensor_path = config.output_dir / f"{output_stem}.pt"
     structured_tensor_path = config.output_dir / f"{output_stem}.sections.pt"
+    structured_v2_tensor_path = config.output_dir / f"{output_stem}.v2.sections.pt"
     metadata_path = config.output_dir / f"{output_stem}.meta.json"
 
     if tensor_path.exists() and structured_tensor_path.exists() and metadata_path.exists() and not config.overwrite:
@@ -362,6 +369,41 @@ def write_player_shard(
         structured_tensor_path,
     )
 
+    v2_samples = build_player_v2_canonical_samples(source_samples, dataset)
+    label_layout_v2 = build_label_layout_v2_metadata(dataset, player_name, len(v2_samples))
+    structured_feature_shapes_v2: dict[str, list[int]] = {}
+    structured_label_shapes_v2: dict[str, list[int]] = {}
+    sample_context_shapes_v2: dict[str, list[int]] = {}
+    if v2_samples:
+        feature_section_tensors_v2 = build_structured_section_tensors(
+            v2_samples,
+            dataset["schema"]["featureSections"],
+            "featureTensors",
+        )
+        label_section_tensors_v2 = build_structured_section_tensors(
+            v2_samples,
+            label_layout_v2["labelSections"],
+            "labelTensors",
+        )
+        sample_context_tensors_v2 = build_sample_context_tensors(v2_samples)
+        torch.save(
+            {
+                "featureTensors": feature_section_tensors_v2,
+                "labelTensors": label_section_tensors_v2,
+                "sampleContext": sample_context_tensors_v2,
+            },
+            structured_v2_tensor_path,
+        )
+        structured_feature_shapes_v2 = {
+            name: list(tensor.shape) for name, tensor in feature_section_tensors_v2.items()
+        }
+        structured_label_shapes_v2 = {
+            name: list(tensor.shape) for name, tensor in label_section_tensors_v2.items()
+        }
+        sample_context_shapes_v2 = {
+            name: list(tensor.shape) for name, tensor in sample_context_tensors_v2.items()
+        }
+
     metadata = {
         "createdAt": utc_now_iso(),
         "replay": dataset["replay"],
@@ -391,6 +433,7 @@ def write_player_shard(
         "sampleContextShapes": {
             name: list(tensor.shape) for name, tensor in sample_context_tensors.items()
         },
+        "v2CommandSampleCount": len(v2_samples),
         "sourceOptions": dataset["options"],
         "sourceCounts": dataset["counts"],
         "playerCounts": player_counts,
@@ -399,6 +442,8 @@ def write_player_shard(
         "featureLayoutV1": dataset.get("featureLayoutV1"),
         "featureContextV1": dataset.get("featureContextV1"),
         "labelLayoutV1": dataset.get("labelLayoutV1"),
+        "labelLayoutV2": label_layout_v2,
+        "labelLayoutV2Preview": dataset.get("labelLayoutV2Preview", {}).get("byPlayer", {}).get(player_name),
         "staticMapPlayerMetadata": {
             "buildabilityReferenceName": dataset.get("staticMapByPlayer", {}).get(player_name, {}).get(
                 "buildabilityReferenceName"
@@ -407,6 +452,10 @@ def write_player_shard(
         },
         "tensorPath": str(tensor_path),
         "structuredTensorPath": str(structured_tensor_path),
+        "structuredV2TensorPath": str(structured_v2_tensor_path) if v2_samples else None,
+        "structuredFeatureShapesV2": structured_feature_shapes_v2,
+        "structuredLabelShapesV2": structured_label_shapes_v2,
+        "sampleContextShapesV2": sample_context_shapes_v2,
     }
     ensure_parent(metadata_path)
     with metadata_path.open("w", encoding="utf-8") as handle:
@@ -423,6 +472,7 @@ def write_player_shard(
         "labelShape": list(labels.shape),
         "tensorPath": str(tensor_path),
         "structuredTensorPath": str(structured_tensor_path),
+        "structuredV2TensorPath": str(structured_v2_tensor_path) if v2_samples else None,
         "metadataPath": str(metadata_path),
     }
 
@@ -430,6 +480,7 @@ def write_player_shard(
 def transform_single_replay(config: TransformConfig, replay_path: Path, run_state: TransformRunState) -> list[dict[str, Any]]:
     dataset = run_py_chronodivide_extract(config, replay_path)
     augment_dataset_with_label_layout_v1(dataset)
+    augment_dataset_with_label_layout_v2_preview(dataset)
     register_dataset_action_types_globally(dataset, run_state)
     augment_dataset_with_feature_context_v1(dataset)
     augment_dataset_with_current_selection_summary(dataset)
@@ -477,6 +528,7 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
                 replay_path,
                 dataset,
                 player_name,
+                player_samples,
                 filtered_samples,
                 filter_stats,
                 player_counts,

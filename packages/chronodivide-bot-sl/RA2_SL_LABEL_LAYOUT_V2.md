@@ -2,6 +2,8 @@
 
 This note defines a simpler supervised-learning label layout for Red Alert 2 replay imitation in `chronodivide-bot-sl`.
 
+Implementation tracking lives in [RA2_SL_LABEL_LAYOUT_V2_IMPLEMENTATION_CHECKLIST.md](D:/workspace/supalosa-chronodivide-bot/packages/chronodivide-bot-sl/RA2_SL_LABEL_LAYOUT_V2_IMPLEMENTATION_CHECKLIST.md).
+
 V2 keeps the useful parts of the V1 work, but changes the label surface in two important ways:
 
 - it replaces the giant flat `action_type` problem with a hierarchical command label

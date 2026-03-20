@@ -45,7 +45,7 @@ async function main() {
     */
     //const mapName = "rekoool_fast_8players.mpr";
     //const mapName = "mp22s8.map"; // <- large flat 8 player map
-    const mapName = "mp06t2.map"; // small map for headless testing
+    const mapName = "2_pinch_point_le.map"; // small map for headless testing
     //const mapName = "mp01t4.map";
     // Bot names must be unique in online mode
     const timestamp = String(Date.now()).substr(-6);
@@ -88,7 +88,7 @@ async function main() {
         ...baseSettings,
         online: false,
         agents: [
-            new VisualisedBot(VISUAL_DEBUG_OPTS, botName1, Countries.FRANCE, [botName2], true).setDebugMode(true),
+            new VisualisedBot(VISUAL_DEBUG_OPTS, botName1, Countries.IRAQ, [botName2], true).setDebugMode(true),
             new SupalosaBot(botName2, Countries.IRAQ, [botName1], false),
         ],
     };

@@ -42,10 +42,32 @@ def _stack_tensor_dict(samples: list[dict[str, torch.Tensor]]) -> dict[str, torc
     if not samples:
         return {}
     keys = samples[0].keys()
-    return {
-        key: torch.stack([sample[key] for sample in samples], dim=0)
-        for key in keys
-    }
+    return {key: _stack_tensor_list([sample[key] for sample in samples]) for key in keys}
+
+
+def _stack_tensor_list(tensors: list[torch.Tensor]) -> torch.Tensor:
+    if not tensors:
+        raise ValueError("_stack_tensor_list requires a non-empty tensor list.")
+    reference_shape = tuple(tensors[0].shape)
+    if all(tuple(tensor.shape) == reference_shape for tensor in tensors):
+        return torch.stack(tensors, dim=0)
+
+    max_shape = [max(int(tensor.shape[dim]) for tensor in tensors) for dim in range(tensors[0].ndim)]
+    padded_tensors = [_pad_tensor_to_shape(tensor, max_shape) for tensor in tensors]
+    return torch.stack(padded_tensors, dim=0)
+
+
+def _pad_tensor_to_shape(tensor: torch.Tensor, target_shape: list[int]) -> torch.Tensor:
+    if list(tensor.shape) == target_shape:
+        return tensor
+    padded = torch.zeros(
+        *target_shape,
+        dtype=tensor.dtype,
+        device=tensor.device,
+    )
+    slices = tuple(slice(0, int(size)) for size in tensor.shape)
+    padded[slices] = tensor
+    return padded
 
 
 def build_model_inputs(feature_sections: dict[str, torch.Tensor]) -> dict[str, Any]:
