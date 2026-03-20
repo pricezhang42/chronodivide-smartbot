@@ -9,6 +9,8 @@ import { SupabotContext } from "./logic/common/context.js";
 import { Strategy } from "./strategy/strategy.js";
 import { DefaultStrategy } from "./strategy/defaultStrategy.js";
 import { BaseBuildingMission } from "./logic/mission/missions/baseBuildingMission.js";
+import type { ProductionAdvisor } from "./logic/building/productionAdvisor.js";
+import { NullProductionAdvisor } from "./logic/building/nullProductionAdvisor.js";
 
 const DEBUG_STATE_UPDATE_INTERVAL_SECONDS = 6;
 
@@ -21,6 +23,7 @@ export class SupalosaBot extends Bot {
     private tickRatio?: number;
     private queueController: QueueController;
     private tickOfLastAttackOrder: number = 0;
+    private strategy: Strategy;
 
     private missionController: MissionController | null = null;
     private matchAwareness: MatchAwareness | null = null;
@@ -35,10 +38,12 @@ export class SupalosaBot extends Bot {
         country: Countries,
         private tryAllyWith: string[] = [],
         private enableLogging = true,
-        private strategy: Strategy = new DefaultStrategy(),
+        strategy: Strategy | undefined = undefined,
+        productionAdvisor: ProductionAdvisor = new NullProductionAdvisor(),
     ) {
         super(name, country);
-        this.queueController = new QueueController();
+        this.strategy = strategy ?? new DefaultStrategy();
+        this.queueController = new QueueController(productionAdvisor);
     }
 
     override onGameStart(game: GameApi) {
@@ -196,5 +201,17 @@ export class SupalosaBot extends Bot {
             this._debugMessages.shift();
         }
         this._debugMessages.push(message);
+    }
+
+    public hasPendingProductionAdvisorRequest(): boolean {
+        return this.queueController.hasPendingProductionAdvisorRequest();
+    }
+
+    public async waitForPendingProductionAdvisorRequest(): Promise<void> {
+        await this.queueController.waitForPendingProductionAdvisorRequest();
+    }
+
+    public async dispose(): Promise<void> {
+        await this.queueController.dispose();
     }
 }

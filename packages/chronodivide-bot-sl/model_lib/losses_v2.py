@@ -25,6 +25,42 @@ from model_lib.losses import (
 from model_lib.units_autoregressive import build_units_autoregressive_targets
 
 
+def _specific_action_type_match_from_predictions(
+    *,
+    action_family_predictions: torch.Tensor,
+    action_family_targets: torch.Tensor,
+    action_family_mask: torch.Tensor,
+    order_type_predictions: torch.Tensor,
+    order_type_targets: torch.Tensor,
+    order_type_mask: torch.Tensor,
+    target_mode_predictions: torch.Tensor,
+    target_mode_targets: torch.Tensor,
+    target_mode_mask: torch.Tensor,
+    queue_update_type_predictions: torch.Tensor,
+    queue_update_type_targets: torch.Tensor,
+    queue_update_type_mask: torch.Tensor,
+    buildable_object_predictions: torch.Tensor,
+    buildable_object_targets: torch.Tensor,
+    buildable_object_mask: torch.Tensor,
+    super_weapon_type_predictions: torch.Tensor,
+    super_weapon_type_targets: torch.Tensor,
+    super_weapon_type_mask: torch.Tensor,
+) -> torch.Tensor:
+    specific_action_match = action_family_predictions == action_family_targets
+    specific_action_match &= (~order_type_mask) | (order_type_predictions == order_type_targets)
+    specific_action_match &= (~target_mode_mask) | (target_mode_predictions == target_mode_targets)
+    specific_action_match &= (~queue_update_type_mask) | (
+        queue_update_type_predictions == queue_update_type_targets
+    )
+    specific_action_match &= (~buildable_object_mask) | (
+        buildable_object_predictions == buildable_object_targets
+    )
+    specific_action_match &= (~super_weapon_type_mask) | (
+        super_weapon_type_predictions == super_weapon_type_targets
+    )
+    return _masked_mean(specific_action_match.to(torch.float32), action_family_mask)
+
+
 def compute_ra2_sl_v2_free_running_metrics(
     outputs: dict[str, torch.Tensor],
     batch: dict[str, Any],
@@ -173,6 +209,26 @@ def compute_ra2_sl_v2_free_running_metrics(
             action_family_predictions,
             action_family_targets,
             action_family_mask,
+        ),
+        "specificActionTypeAccuracy": _specific_action_type_match_from_predictions(
+            action_family_predictions=action_family_predictions,
+            action_family_targets=action_family_targets,
+            action_family_mask=action_family_mask,
+            order_type_predictions=order_type_predictions,
+            order_type_targets=order_type_targets,
+            order_type_mask=order_type_mask,
+            target_mode_predictions=target_mode_predictions,
+            target_mode_targets=target_mode_targets,
+            target_mode_mask=target_mode_mask,
+            queue_update_type_predictions=queue_update_type_predictions,
+            queue_update_type_targets=queue_update_type_targets,
+            queue_update_type_mask=queue_update_type_mask,
+            buildable_object_predictions=buildable_object_predictions,
+            buildable_object_targets=buildable_object_targets,
+            buildable_object_mask=buildable_object_mask,
+            super_weapon_type_predictions=super_weapon_type_predictions,
+            super_weapon_type_targets=super_weapon_type_targets,
+            super_weapon_type_mask=super_weapon_type_mask,
         ),
         "delayAccuracy": _masked_classification_accuracy_from_predictions(
             delay_predictions,
@@ -405,6 +461,26 @@ def compute_ra2_sl_v2_loss(
             flat_action_family_logits,
             flat_action_family_targets,
             flat_action_family_mask,
+        ),
+        "specificActionTypeAccuracy": _specific_action_type_match_from_predictions(
+            action_family_predictions=torch.argmax(flat_action_family_logits, dim=-1),
+            action_family_targets=flat_action_family_targets,
+            action_family_mask=flat_action_family_mask,
+            order_type_predictions=torch.argmax(flat_order_type_logits, dim=-1),
+            order_type_targets=flat_order_type_targets,
+            order_type_mask=flat_order_type_mask,
+            target_mode_predictions=torch.argmax(flat_target_mode_logits, dim=-1),
+            target_mode_targets=flat_target_mode_targets,
+            target_mode_mask=flat_target_mode_mask,
+            queue_update_type_predictions=torch.argmax(flat_queue_update_type_logits, dim=-1),
+            queue_update_type_targets=flat_queue_update_type_targets,
+            queue_update_type_mask=flat_queue_update_type_mask,
+            buildable_object_predictions=torch.argmax(flat_buildable_object_logits, dim=-1),
+            buildable_object_targets=flat_buildable_object_targets,
+            buildable_object_mask=flat_buildable_object_mask,
+            super_weapon_type_predictions=torch.argmax(flat_super_weapon_type_logits, dim=-1),
+            super_weapon_type_targets=flat_super_weapon_type_targets,
+            super_weapon_type_mask=flat_super_weapon_type_mask,
         ),
         "delayAccuracy": _masked_accuracy(flat_delay_logits, flat_delay_targets, flat_delay_mask),
         "orderTypeAccuracy": _masked_accuracy(

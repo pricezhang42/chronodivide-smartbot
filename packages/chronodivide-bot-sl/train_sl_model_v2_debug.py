@@ -19,6 +19,7 @@ from model_lib.dataset import (
 )
 from model_lib.losses_v2 import compute_ra2_sl_v2_free_running_metrics, compute_ra2_sl_v2_loss
 from model_lib.model_v2 import RA2SLV2DebugConfig, RA2SLV2DebugModel
+from post_train_arena_eval import DEFAULT_DRIVER_DIR, run_post_train_arena_eval
 from transform_lib.label_layout_v2 import LABEL_LAYOUT_V2_ACTION_FAMILIES
 from train_sl_model import (
     build_loader,
@@ -57,6 +58,7 @@ class TrainConfigV2Debug:
     action_family_weighting: str
     action_family_weight_min: float
     action_family_weight_max: float
+    place_building_weight_multiplier: float
     family_balanced_sampling: bool
     batch_size: int
     num_workers: int
@@ -73,6 +75,17 @@ class TrainConfigV2Debug:
     lstm_num_layers: int
     checkpoint_dir: Path
     device: str | None
+    post_train_arena_eval: bool
+    post_train_arena_eval_driver_dir: Path
+    post_train_arena_eval_match_count: int
+    post_train_arena_eval_map_name: str
+    post_train_arena_eval_max_ticks: int
+    post_train_arena_eval_sample_interval_ticks: int
+    post_train_arena_eval_candidate_mode: str
+    post_train_arena_eval_candidate_country: str
+    post_train_arena_eval_opponent_mode: str
+    post_train_arena_eval_opponent_country: str
+    post_train_arena_eval_mix_dir: Path | None
 
 
 def parse_csv(value: str | None) -> list[str] | None:
@@ -110,6 +123,7 @@ def parse_args() -> TrainConfigV2Debug:
     )
     parser.add_argument("--action-family-weight-min", type=float, default=0.25)
     parser.add_argument("--action-family-weight-max", type=float, default=4.0)
+    parser.add_argument("--place-building-weight-multiplier", type=float, default=1.75)
     parser.add_argument("--family-balanced-sampling", action="store_true")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -126,6 +140,27 @@ def parse_args() -> TrainConfigV2Debug:
     parser.add_argument("--lstm-num-layers", type=int, default=1)
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--post-train-arena-eval", action="store_true")
+    parser.add_argument("--post-train-arena-eval-driver-dir", type=Path, default=DEFAULT_DRIVER_DIR)
+    parser.add_argument("--post-train-arena-eval-match-count", type=int, default=3)
+    parser.add_argument("--post-train-arena-eval-map-name", type=str, default="2_pinch_point_le.map")
+    parser.add_argument("--post-train-arena-eval-max-ticks", type=int, default=12000)
+    parser.add_argument("--post-train-arena-eval-sample-interval-ticks", type=int, default=15)
+    parser.add_argument(
+        "--post-train-arena-eval-candidate-mode",
+        type=str,
+        choices=("baseline", "advisor"),
+        default="advisor",
+    )
+    parser.add_argument("--post-train-arena-eval-candidate-country", type=str, default="IRAQ")
+    parser.add_argument(
+        "--post-train-arena-eval-opponent-mode",
+        type=str,
+        choices=("baseline", "advisor"),
+        default="baseline",
+    )
+    parser.add_argument("--post-train-arena-eval-opponent-country", type=str, default="IRAQ")
+    parser.add_argument("--post-train-arena-eval-mix-dir", type=Path, default=None)
 
     args = parser.parse_args()
     if args.window_size <= 0:
@@ -152,6 +187,7 @@ def parse_args() -> TrainConfigV2Debug:
         action_family_weighting=args.action_family_weighting,
         action_family_weight_min=args.action_family_weight_min,
         action_family_weight_max=args.action_family_weight_max,
+        place_building_weight_multiplier=args.place_building_weight_multiplier,
         family_balanced_sampling=bool(args.family_balanced_sampling),
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -168,6 +204,21 @@ def parse_args() -> TrainConfigV2Debug:
         lstm_num_layers=args.lstm_num_layers,
         checkpoint_dir=checkpoint_dir,
         device=args.device,
+        post_train_arena_eval=bool(args.post_train_arena_eval),
+        post_train_arena_eval_driver_dir=args.post_train_arena_eval_driver_dir.resolve(),
+        post_train_arena_eval_match_count=args.post_train_arena_eval_match_count,
+        post_train_arena_eval_map_name=args.post_train_arena_eval_map_name,
+        post_train_arena_eval_max_ticks=args.post_train_arena_eval_max_ticks,
+        post_train_arena_eval_sample_interval_ticks=args.post_train_arena_eval_sample_interval_ticks,
+        post_train_arena_eval_candidate_mode=args.post_train_arena_eval_candidate_mode,
+        post_train_arena_eval_candidate_country=args.post_train_arena_eval_candidate_country,
+        post_train_arena_eval_opponent_mode=args.post_train_arena_eval_opponent_mode,
+        post_train_arena_eval_opponent_country=args.post_train_arena_eval_opponent_country,
+        post_train_arena_eval_mix_dir=(
+            args.post_train_arena_eval_mix_dir.resolve()
+            if args.post_train_arena_eval_mix_dir is not None
+            else None
+        ),
     )
 
 
@@ -299,6 +350,13 @@ def build_action_family_weighting(
     normalized_seen_weights = clamped_seen_weights / clamped_seen_weights.mean().clamp(min=1e-9)
     weights[seen_mask] = normalized_seen_weights.to(torch.float32)
 
+    place_building_family_id = LABEL_LAYOUT_V2_ACTION_FAMILIES.index("PlaceBuilding")
+    if seen_mask[place_building_family_id] and config.place_building_weight_multiplier != 1.0:
+        boosted_weight = (
+            weights[place_building_family_id] * float(config.place_building_weight_multiplier)
+        ).clamp(min=config.action_family_weight_min, max=config.action_family_weight_max)
+        weights[place_building_family_id] = boosted_weight
+
     seen_indices = torch.nonzero(seen_mask, as_tuple=False).reshape(-1)
     ranked_by_weight = sorted(
         ((int(index.item()), float(weights[int(index.item())].item())) for index in seen_indices),
@@ -334,6 +392,7 @@ def build_action_family_weighting(
         "mode": config.action_family_weighting,
         "weightMin": config.action_family_weight_min,
         "weightMax": config.action_family_weight_max,
+        "placeBuildingWeightMultiplier": config.place_building_weight_multiplier,
         "classCount": class_count,
         "seenClassCount": int(seen_mask.sum().item()),
         "sampleCount": int(counts.sum().item()),
@@ -672,6 +731,7 @@ def main() -> None:
             )
             + (
                 f" val_free_family={val_free_metrics['metric.actionFamilyAccuracy']:.4f}"
+                f" val_free_specific={val_free_metrics['metric.specificActionTypeAccuracy']:.4f}"
                 f" val_free_full={val_free_metrics['metric.fullCommandExactMatch']:.4f}"
                 if val_free_metrics is not None
                 else ""
@@ -724,7 +784,32 @@ def main() -> None:
         "finalValMetrics": last_val_metrics,
         "finalValFreeMetrics": last_val_free_metrics,
     }
-    save_json(config.output_dir / "training_summary.json", final_summary)
+    training_summary_path = config.output_dir / "training_summary.json"
+    save_json(training_summary_path, final_summary)
+
+    if config.post_train_arena_eval:
+        try:
+            arena_eval_summary = run_post_train_arena_eval(
+                enabled=True,
+                driver_dir=config.post_train_arena_eval_driver_dir,
+                output_dir=config.output_dir,
+                checkpoint_dir=config.checkpoint_dir,
+                preferred_checkpoint_names=["best.pt", "latest.pt"],
+                match_count=config.post_train_arena_eval_match_count,
+                map_name=config.post_train_arena_eval_map_name,
+                max_ticks=config.post_train_arena_eval_max_ticks,
+                sample_interval_ticks=config.post_train_arena_eval_sample_interval_ticks,
+                candidate_mode=config.post_train_arena_eval_candidate_mode,
+                candidate_country=config.post_train_arena_eval_candidate_country,
+                opponent_mode=config.post_train_arena_eval_opponent_mode,
+                opponent_country=config.post_train_arena_eval_opponent_country,
+                mix_dir=config.post_train_arena_eval_mix_dir,
+            )
+            final_summary["postTrainArenaEval"] = arena_eval_summary
+        except Exception as exc:
+            final_summary["postTrainArenaEvalError"] = str(exc)
+            print(f"Post-train arena evaluation failed: {exc}")
+        save_json(training_summary_path, final_summary)
 
 
 if __name__ == "__main__":

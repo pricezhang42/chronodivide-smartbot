@@ -502,53 +502,37 @@ class RA2SLPredictionHeads(nn.Module):
             dropout=config.dropout,
         )
         self.condition_dropout = nn.Dropout(config.dropout)
+        def build_action_semantic_mask(field_name: str) -> torch.Tensor:
+            return torch.tensor(
+                [
+                    bool(ACTION_INFO_MASK.get(action_type_id, {}).get(field_name, False))
+                    for action_type_id in range(config.action_vocab_size)
+                ],
+                dtype=torch.bool,
+            )
         self.register_buffer(
             "action_type_uses_queue_mask",
-            torch.tensor(
-                [bool(ACTION_INFO_MASK[action_type_id]["usesQueue"]) for action_type_id in range(config.action_vocab_size)],
-                dtype=torch.bool,
-            ),
+            build_action_semantic_mask("usesQueue"),
             persistent=False,
         )
         self.register_buffer(
             "action_type_uses_units_mask",
-            torch.tensor(
-                [bool(ACTION_INFO_MASK[action_type_id]["usesUnits"]) for action_type_id in range(config.action_vocab_size)],
-                dtype=torch.bool,
-            ),
+            build_action_semantic_mask("usesUnits"),
             persistent=False,
         )
         self.register_buffer(
             "action_type_uses_target_entity_mask",
-            torch.tensor(
-                [
-                    bool(ACTION_INFO_MASK[action_type_id]["usesTargetEntity"])
-                    for action_type_id in range(config.action_vocab_size)
-                ],
-                dtype=torch.bool,
-            ),
+            build_action_semantic_mask("usesTargetEntity"),
             persistent=False,
         )
         self.register_buffer(
             "action_type_uses_target_location_mask",
-            torch.tensor(
-                [
-                    bool(ACTION_INFO_MASK[action_type_id]["usesTargetLocation"])
-                    for action_type_id in range(config.action_vocab_size)
-                ],
-                dtype=torch.bool,
-            ),
+            build_action_semantic_mask("usesTargetLocation"),
             persistent=False,
         )
         self.register_buffer(
             "action_type_uses_target_location2_mask",
-            torch.tensor(
-                [
-                    bool(ACTION_INFO_MASK[action_type_id]["usesTargetLocation2"])
-                    for action_type_id in range(config.action_vocab_size)
-                ],
-                dtype=torch.bool,
-            ),
+            build_action_semantic_mask("usesTargetLocation2"),
             persistent=False,
         )
 

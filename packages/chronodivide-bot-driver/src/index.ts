@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { CreateBaseOpts, CreateOfflineOpts, CreateOnlineOpts, cdapi } from "@chronodivide/game-api";
 import { SupalosaBot } from "@supalosa/chronodivide-bot/dist/bot/bot.js";
+import { CheckpointControlBot } from "@supalosa/chronodivide-bot/dist/bot/checkpointControlBot.js";
 import { Countries } from "@supalosa/chronodivide-bot/dist/bot/logic/common/utils.js";
 import { VisualisedBot, VisualisedBotOpts } from "./visualisation/visualisedBot.js";
 
@@ -14,6 +15,27 @@ const VISUAL_DEBUG_OPTS: VisualisedBotOpts = {
     includeBaseMap: false,
     composeHeatmapsOnBaseMap: false,
 };
+
+type LocalBotMode = "supalosa" | "control";
+
+function parseLocalBotMode(rawValue: string | undefined): LocalBotMode {
+    return rawValue?.trim().toLowerCase() === "control" ? "control" : "supalosa";
+}
+
+function buildOfflineBot(
+    mode: LocalBotMode,
+    name: string,
+    country: Countries,
+    allies: string[],
+    enableLogging: boolean,
+    debugMode = false,
+) {
+    const bot =
+        mode === "control"
+            ? new CheckpointControlBot(name, country, allies, enableLogging)
+            : new SupalosaBot(name, country, allies, enableLogging);
+    return debugMode ? bot.setDebugMode(true) : bot;
+}
 
 async function main() {
     /*
@@ -53,6 +75,7 @@ async function main() {
     const botName2 = `Bob${timestamp}`;
     const botName3 = `Mike${timestamp}`;
     const botName4 = `Charlie${timestamp}`;
+    const localBotMode = parseLocalBotMode(process.env.LOCAL_BOT_MODE);
 
     await cdapi.init(process.env.MIX_DIR || "./../../../ra2-headless-mix");
 
@@ -89,7 +112,7 @@ async function main() {
         online: false,
         agents: [
             new VisualisedBot(VISUAL_DEBUG_OPTS, botName1, Countries.IRAQ, [botName2], true).setDebugMode(true),
-            new SupalosaBot(botName2, Countries.IRAQ, [botName1], false),
+            buildOfflineBot(localBotMode, botName2, Countries.IRAQ, [botName1], false),
         ],
     };
 
@@ -97,10 +120,10 @@ async function main() {
         ...baseSettings,
         online: false,
         agents: [
-            new SupalosaBot(botName1, Countries.FRANCE, [botName2], false),
-            new SupalosaBot(botName2, Countries.RUSSIA, [botName1], true).setDebugMode(true),
-            new SupalosaBot(botName3, Countries.RUSSIA, [botName4], false),
-            new SupalosaBot(botName4, Countries.FRANCE, [botName3], false),
+            buildOfflineBot(localBotMode, botName1, Countries.FRANCE, [botName2], false),
+            buildOfflineBot(localBotMode, botName2, Countries.RUSSIA, [botName1], true, true),
+            buildOfflineBot(localBotMode, botName3, Countries.RUSSIA, [botName4], false),
+            buildOfflineBot(localBotMode, botName4, Countries.FRANCE, [botName3], false),
         ],
     };
 
@@ -115,13 +138,13 @@ async function main() {
         online: false,
         agents: [
             new VisualisedBot(VISUAL_DEBUG_OPTS, botName1, Countries.FRANCE, team1, true).setDebugMode(true),
-            new SupalosaBot(botName2, Countries.RUSSIA, team1, false),
-            new SupalosaBot(botName3, Countries.RUSSIA, team1, false),
-            new SupalosaBot(botName4, Countries.FRANCE, team1, false),
-            new SupalosaBot(botName5, Countries.FRANCE, team2, false),
-            new SupalosaBot(botName6, Countries.RUSSIA, team2, false),
-            new SupalosaBot(botName7, Countries.RUSSIA, team2, false),
-            new SupalosaBot(botName8, Countries.FRANCE, team2, false),
+            buildOfflineBot(localBotMode, botName2, Countries.RUSSIA, team1, false),
+            buildOfflineBot(localBotMode, botName3, Countries.RUSSIA, team1, false),
+            buildOfflineBot(localBotMode, botName4, Countries.FRANCE, team1, false),
+            buildOfflineBot(localBotMode, botName5, Countries.FRANCE, team2, false),
+            buildOfflineBot(localBotMode, botName6, Countries.RUSSIA, team2, false),
+            buildOfflineBot(localBotMode, botName7, Countries.RUSSIA, team2, false),
+            buildOfflineBot(localBotMode, botName8, Countries.FRANCE, team2, false),
         ],
     };
 

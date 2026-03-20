@@ -23,6 +23,7 @@ from model_lib.dataset import (
 )
 from model_lib.losses import compute_ra2_sl_free_running_metrics, compute_ra2_sl_loss
 from model_lib.model import RA2SLBaselineConfig, RA2SLBaselineModel
+from post_train_arena_eval import DEFAULT_DRIVER_DIR, run_post_train_arena_eval
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
@@ -63,6 +64,17 @@ class TrainConfig:
     checkpoint_dir: Path
     device: str | None
     resume: Path | None
+    post_train_arena_eval: bool
+    post_train_arena_eval_driver_dir: Path
+    post_train_arena_eval_match_count: int
+    post_train_arena_eval_map_name: str
+    post_train_arena_eval_max_ticks: int
+    post_train_arena_eval_sample_interval_ticks: int
+    post_train_arena_eval_candidate_mode: str
+    post_train_arena_eval_candidate_country: str
+    post_train_arena_eval_opponent_mode: str
+    post_train_arena_eval_opponent_country: str
+    post_train_arena_eval_mix_dir: Path | None
 
 
 def utc_now_iso() -> str:
@@ -133,6 +145,27 @@ def parse_args() -> TrainConfig:
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--resume", type=Path, default=None)
+    parser.add_argument("--post-train-arena-eval", action="store_true")
+    parser.add_argument("--post-train-arena-eval-driver-dir", type=Path, default=DEFAULT_DRIVER_DIR)
+    parser.add_argument("--post-train-arena-eval-match-count", type=int, default=3)
+    parser.add_argument("--post-train-arena-eval-map-name", type=str, default="2_pinch_point_le.map")
+    parser.add_argument("--post-train-arena-eval-max-ticks", type=int, default=12000)
+    parser.add_argument("--post-train-arena-eval-sample-interval-ticks", type=int, default=15)
+    parser.add_argument(
+        "--post-train-arena-eval-candidate-mode",
+        type=str,
+        choices=("baseline", "advisor"),
+        default="advisor",
+    )
+    parser.add_argument("--post-train-arena-eval-candidate-country", type=str, default="IRAQ")
+    parser.add_argument(
+        "--post-train-arena-eval-opponent-mode",
+        type=str,
+        choices=("baseline", "advisor"),
+        default="baseline",
+    )
+    parser.add_argument("--post-train-arena-eval-opponent-country", type=str, default="IRAQ")
+    parser.add_argument("--post-train-arena-eval-mix-dir", type=Path, default=None)
 
     args = parser.parse_args()
     if args.window_size <= 0:
@@ -174,6 +207,21 @@ def parse_args() -> TrainConfig:
         checkpoint_dir=checkpoint_dir,
         device=args.device,
         resume=args.resume.resolve() if args.resume is not None else None,
+        post_train_arena_eval=bool(args.post_train_arena_eval),
+        post_train_arena_eval_driver_dir=args.post_train_arena_eval_driver_dir.resolve(),
+        post_train_arena_eval_match_count=args.post_train_arena_eval_match_count,
+        post_train_arena_eval_map_name=args.post_train_arena_eval_map_name,
+        post_train_arena_eval_max_ticks=args.post_train_arena_eval_max_ticks,
+        post_train_arena_eval_sample_interval_ticks=args.post_train_arena_eval_sample_interval_ticks,
+        post_train_arena_eval_candidate_mode=args.post_train_arena_eval_candidate_mode,
+        post_train_arena_eval_candidate_country=args.post_train_arena_eval_candidate_country,
+        post_train_arena_eval_opponent_mode=args.post_train_arena_eval_opponent_mode,
+        post_train_arena_eval_opponent_country=args.post_train_arena_eval_opponent_country,
+        post_train_arena_eval_mix_dir=(
+            args.post_train_arena_eval_mix_dir.resolve()
+            if args.post_train_arena_eval_mix_dir is not None
+            else None
+        ),
     )
 
 
@@ -841,7 +889,37 @@ def main() -> None:
         "finalValMetrics": last_val_metrics,
         "finalValFreeMetrics": last_val_free_metrics,
     }
-    save_json(config.output_dir / "training_summary.json", final_summary)
+    training_summary_path = config.output_dir / "training_summary.json"
+    save_json(training_summary_path, final_summary)
+
+    if config.post_train_arena_eval:
+        try:
+            arena_eval_summary = run_post_train_arena_eval(
+                enabled=True,
+                driver_dir=config.post_train_arena_eval_driver_dir,
+                output_dir=config.output_dir,
+                checkpoint_dir=config.checkpoint_dir,
+                preferred_checkpoint_names=[
+                    "best_val_free_action.pt",
+                    "best_val_loss.pt",
+                    "best.pt",
+                    "latest.pt",
+                ],
+                match_count=config.post_train_arena_eval_match_count,
+                map_name=config.post_train_arena_eval_map_name,
+                max_ticks=config.post_train_arena_eval_max_ticks,
+                sample_interval_ticks=config.post_train_arena_eval_sample_interval_ticks,
+                candidate_mode=config.post_train_arena_eval_candidate_mode,
+                candidate_country=config.post_train_arena_eval_candidate_country,
+                opponent_mode=config.post_train_arena_eval_opponent_mode,
+                opponent_country=config.post_train_arena_eval_opponent_country,
+                mix_dir=config.post_train_arena_eval_mix_dir,
+            )
+            final_summary["postTrainArenaEval"] = arena_eval_summary
+        except Exception as exc:
+            final_summary["postTrainArenaEvalError"] = str(exc)
+            print(f"Post-train arena evaluation failed: {exc}")
+        save_json(training_summary_path, final_summary)
 
 
 if __name__ == "__main__":

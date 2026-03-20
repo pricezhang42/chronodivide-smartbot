@@ -11,6 +11,10 @@ import { GlobalThreat } from "../threat/threat.js";
 import { TechnoRulesWithPriority } from "./buildingRules.js";
 import { SupabotContext } from "../common/context.js";
 import { UnitRequest } from "../mission/missionController.js";
+import type { ProductionAdvisor } from "./productionAdvisor.js";
+import { NullProductionAdvisor } from "./nullProductionAdvisor.js";
+import { buildProductionAdvisorInput } from "./productionAdvisorSerializer.js";
+import type { CheckpointAdvisorRuntimeState, ProductionAdvisorOutput } from "./productionAdvisorTypes.js";
 
 export const QUEUES = [
     QueueType.Structures,
@@ -52,12 +56,24 @@ type QueueState = {
 };
 
 const REPAIR_CHECK_INTERVAL = 30;
+const PRODUCTION_ADVISOR_UPDATE_INTERVAL = 15;
+const BUILD_ORDER_TRACE_LIMIT = 20;
+const MISSING_INT = -1;
 
 export class QueueController {
     private queueStates: QueueState[] = [];
     private lastRepairCheckAt = 0;
+    private latestProductionAdvisorRecommendations: ProductionAdvisorOutput = null;
+    private pendingProductionAdvisorRequest: Promise<void> | null = null;
+    private lastProductionAdvisorRequestAt = Number.NEGATIVE_INFINITY;
+    private runtimeState: CheckpointAdvisorRuntimeState = {
+        lastActionTick: null,
+        lastActionTypeNameV1: null,
+        lastQueueValue: MISSING_INT,
+        buildOrderActionTypeNamesV1: [],
+    };
 
-    constructor() {}
+    constructor(private productionAdvisor: ProductionAdvisor = new NullProductionAdvisor()) {}
 
     public onAiUpdate(
         context: SupabotContext,
@@ -68,9 +84,11 @@ export class QueueController {
         const { game, player } = context;
         const { production: productionApi, actions: actionsApi } = player;
         const playerData = game.getPlayerData(player.name);
+        this.maybeRequestProductionAdvisorRecommendations(context, threatCache, unitTypeRequests, logger);
+        const blendedUnitTypeRequests = this.blendAdvisorRecommendations(unitTypeRequests);
         this.queueStates = QUEUES.map((queueType) => {
             const options = productionApi.getAvailableObjects(queueType);
-            const items = QueueController.getPrioritiesForBuildingOptions(options, unitTypeRequests);
+            const items = QueueController.getPrioritiesForBuildingOptions(options, blendedUnitTypeRequests);
             const topItem = items.length > 0 ? items[items.length - 1] : undefined;
             return {
                 queue: queueType,
@@ -93,7 +111,7 @@ export class QueueController {
                 actionsApi,
                 playerData,
                 threatCache,
-                unitTypeRequests,
+                blendedUnitTypeRequests,
                 decision.queue,
                 decision.topItem,
                 totalWeightAcrossQueues,
@@ -114,6 +132,107 @@ export class QueueController {
                 }
             });
             this.lastRepairCheckAt = game.getCurrentTick();
+        }
+    }
+
+    public hasPendingProductionAdvisorRequest(): boolean {
+        return this.pendingProductionAdvisorRequest !== null;
+    }
+
+    public async waitForPendingProductionAdvisorRequest(): Promise<void> {
+        await this.pendingProductionAdvisorRequest;
+    }
+
+    public async dispose(): Promise<void> {
+        await this.productionAdvisor.dispose?.();
+    }
+
+    private maybeRequestProductionAdvisorRecommendations(
+        context: SupabotContext,
+        threatCache: GlobalThreat | null,
+        unitTypeRequests: Map<string, UnitRequest>,
+        logger: (message: string) => void,
+    ): void {
+        if (!this.productionAdvisor.enabled || this.pendingProductionAdvisorRequest !== null) {
+            return;
+        }
+        const currentTick = context.game.getCurrentTick();
+        if (currentTick < this.lastProductionAdvisorRequestAt + PRODUCTION_ADVISOR_UPDATE_INTERVAL) {
+            return;
+        }
+
+        this.lastProductionAdvisorRequestAt = currentTick;
+        const requestedUnitTypes = new Map(
+            [...unitTypeRequests.entries()].map(([name, request]) => [name, { ...request }]),
+        );
+        const includeCheckpointFeatures = this.productionAdvisor.requiresLiveFeaturePayload;
+        this.pendingProductionAdvisorRequest = buildProductionAdvisorInput(
+            context,
+            threatCache,
+            requestedUnitTypes,
+            this.runtimeState,
+            includeCheckpointFeatures,
+        )
+            .then((input) => this.productionAdvisor.getRecommendations(input))
+            .then((recommendations) => {
+                this.latestProductionAdvisorRecommendations = recommendations;
+            })
+            .catch((error: unknown) => {
+                logger(`Production advisor request failed: ${String(error)}`);
+            })
+            .finally(() => {
+                this.pendingProductionAdvisorRequest = null;
+            });
+    }
+
+    private blendAdvisorRecommendations(unitTypeRequests: Map<string, UnitRequest>): Map<string, UnitRequest> {
+        const blended = new Map<string, UnitRequest>(
+            [...unitTypeRequests.entries()].map(([name, request]) => [name, { ...request }]),
+        );
+        if (!this.latestProductionAdvisorRecommendations) {
+            return blended;
+        }
+
+        Object.entries(this.latestProductionAdvisorRecommendations).forEach(([queueName, recommendations]) => {
+            if (!recommendations) {
+                return;
+            }
+            const isBuildingQueueName = queueName === "Structures" || queueName === "Armory";
+            Object.entries(recommendations).forEach(([unitName, score]) => {
+                if (!(score > 0)) {
+                    return;
+                }
+                const existingRequest = blended.get(unitName);
+                if (isBuildingQueueName && (!existingRequest || existingRequest.specificLocation === null)) {
+                    return;
+                }
+                const nextPriority = Math.max(0, (existingRequest?.priority ?? 0) + score);
+                if (nextPriority <= 0) {
+                    return;
+                }
+                blended.set(unitName, {
+                    priority: nextPriority,
+                    specificLocation: existingRequest?.specificLocation ?? null,
+                });
+            });
+        });
+
+        return blended;
+    }
+
+    private recordProductionAction(tick: number, actionTypeNameV1: string): void {
+        this.runtimeState.lastActionTick = tick;
+        this.runtimeState.lastActionTypeNameV1 = actionTypeNameV1;
+        this.runtimeState.lastQueueValue = MISSING_INT;
+        if (
+            actionTypeNameV1.startsWith("Queue::Add::") ||
+            actionTypeNameV1.startsWith("PlaceBuilding::") ||
+            actionTypeNameV1.startsWith("Order::Deploy::") ||
+            actionTypeNameV1.startsWith("Order::DeploySelected::")
+        ) {
+            if (this.runtimeState.buildOrderActionTypeNamesV1.length < BUILD_ORDER_TRACE_LIMIT) {
+                this.runtimeState.buildOrderActionTypeNamesV1.push(actionTypeNameV1);
+            }
         }
     }
 
@@ -138,6 +257,7 @@ export class QueueController {
             if (decision !== undefined) {
                 logger(`Decision (${queueTypeToName(queueType)}): ${decision.unit.name}`);
                 actionsApi.queueForProduction(queueType, decision.unit.name, decision.unit.type, 1);
+                this.recordProductionAction(game.getCurrentTick(), `Queue::Add::${decision.unit.name}`);
             }
         } else if (queueData.status == QueueStatus.Ready && queueData.items.length > 0) {
             if (isBuildingQueue(queueType)) {
@@ -147,12 +267,14 @@ export class QueueController {
                     // No one is requesting this anymore, cancel
                     logger(`Cancelling ready ${readyUnit.name} because no one is requesting anymore`);
                     actionsApi.unqueueFromProduction(queueType, readyUnit.name, readyUnit.type, 1);
+                    this.recordProductionAction(game.getCurrentTick(), `Queue::Cancel::${readyUnit.name}`);
                     return;
                 }
                 if (!currentRequest.specificLocation) {
                     // No one is requesting this anymore, cancel
                     logger(`Cancelling ready ${readyUnit.name} because location is unspecified`);
                     actionsApi.unqueueFromProduction(queueType, readyUnit.name, readyUnit.type, 1);
+                    this.recordProductionAction(game.getCurrentTick(), `Queue::Cancel::${readyUnit.name}`);
                     return;
                 }
                 actionsApi.placeBuilding(
@@ -160,6 +282,7 @@ export class QueueController {
                     currentRequest.specificLocation.x,
                     currentRequest.specificLocation.y,
                 );
+                this.recordProductionAction(game.getCurrentTick(), `PlaceBuilding::${readyUnit.name}`);
             }
         } else if (queueData.status == QueueStatus.Active && queueData.items.length > 0 && decision != null) {
             // Consider cancelling if something else is significantly higher priority than what is currently being produced.
@@ -177,6 +300,7 @@ export class QueueController {
                         } has 2x higher priority.`,
                     );
                     actionsApi.unqueueFromProduction(queueData.type, currentProduction.name, currentProduction.type, 1);
+                    this.recordProductionAction(game.getCurrentTick(), `Queue::Cancel::${currentProduction.name}`);
                 }
             } else {
                 // Not changing our mind, but maybe other queues are more important for now.
@@ -187,6 +311,7 @@ export class QueueController {
                         }/${totalWeightAcrossQueues})`,
                     );
                     actionsApi.pauseProduction(queueData.type);
+                    this.recordProductionAction(game.getCurrentTick(), `Queue::Hold::${queueTypeToName(queueData.type)}`);
                 }
             }
         } else if (queueData.status == QueueStatus.OnHold) {
@@ -194,6 +319,7 @@ export class QueueController {
             if (myCredits >= totalCostAcrossQueues) {
                 logger(`Resuming queue ${queueTypeToName(queueData.type)} because credits are high`);
                 actionsApi.resumeProduction(queueData.type);
+                this.recordProductionAction(game.getCurrentTick(), `Queue::Resume::${queueTypeToName(queueData.type)}`);
             } else if (decision && decision.priority >= totalWeightAcrossQueues * 0.25) {
                 logger(
                     `Resuming queue ${queueTypeToName(queueData.type)} because weight is high (${
@@ -201,6 +327,7 @@ export class QueueController {
                     }/${totalWeightAcrossQueues})`,
                 );
                 actionsApi.resumeProduction(queueData.type);
+                this.recordProductionAction(game.getCurrentTick(), `Queue::Resume::${queueTypeToName(queueData.type)}`);
             }
         }
     }
