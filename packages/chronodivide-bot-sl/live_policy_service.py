@@ -265,6 +265,36 @@ def _self_building_count(payload: dict[str, Any]) -> int:
     return count
 
 
+def _any_owned_mobile_units(payload: dict[str, Any]) -> bool:
+    """Check whether the player owns any mobile unit in the full entity list (not just current selection)."""
+    entity_features = payload.get("featureTensors", {}).get("entityFeatures", [])
+    entity_mask = payload.get("featureTensors", {}).get("entityMask", [])
+    if not isinstance(entity_features, list) or not isinstance(entity_mask, list):
+        return False
+    relation_self_index = _feature_index(payload, "relation_self")
+    can_move_index = _feature_index(payload, "can_move")
+    if relation_self_index is None or can_move_index is None:
+        return False
+    for entity_index, features in enumerate(entity_features):
+        if entity_index >= len(entity_mask) or int(entity_mask[entity_index]) <= 0:
+            continue
+        if not isinstance(features, list):
+            continue
+        max_idx = max(relation_self_index, can_move_index)
+        if max_idx >= len(features):
+            continue
+        if float(features[relation_self_index]) > 0.5 and float(features[can_move_index]) > 0.5:
+            return True
+    return False
+
+
+def _has_any_production_queue(payload: dict[str, Any]) -> bool:
+    """Check whether the player has any production queues (even if temporarily empty/blocked)."""
+    player_production = payload.get("playerProduction") or {}
+    queues = player_production.get("queues", [])
+    return isinstance(queues, list) and len(queues) > 0
+
+
 def _selected_have_repairable(payload: dict[str, Any]) -> bool:
     for entity in _selected_entities(payload):
         if _feature_value(entity, payload, "has_wrench_repair") > 0.5:
@@ -387,17 +417,15 @@ def _available_add_object_names(payload: dict[str, Any]) -> set[str]:
         return _available_object_names(payload)
     queued_names = _queued_object_names(payload)
     ready_building_names = _ready_place_building_names(payload)
-    blocked_queue_names = _queue_names_with_pending_buildings(payload)
-    available_names: set[str] = set()
-    for queue_name, queue_object_names in available_names_by_queue.items():
-        if queue_name in blocked_queue_names:
-            available_names.update(name for name in queue_object_names if name not in PLACE_BUILDING_NAMES)
-            continue
-        available_names.update(queue_object_names)
-    suppressed_ready_building_names = {
+    # Only suppress specific building names that are already queued or ready to place,
+    # instead of blocking the entire queue when a building is pending placement.
+    suppressed_building_names = {
         name for name in queued_names | ready_building_names if name in PLACE_BUILDING_NAMES
     }
-    return {name for name in available_names if name not in suppressed_ready_building_names}
+    available_names: set[str] = set()
+    for queue_name, queue_object_names in available_names_by_queue.items():
+        available_names.update(queue_object_names)
+    return {name for name in available_names if name not in suppressed_building_names}
 
 
 def _ready_place_building_names(payload: dict[str, Any]) -> set[str]:
@@ -409,10 +437,23 @@ def _ready_place_building_names(payload: dict[str, Any]) -> set[str]:
     for queue in queues:
         if not isinstance(queue, dict):
             continue
-        if queue.get("statusName") != "Ready":
-            continue
+        queue_type_name = queue.get("typeName", "?")
+        queue_status_name = queue.get("statusName", "?")
         items = queue.get("items", [])
         if not isinstance(items, list):
+            continue
+        item_details = []
+        for item in items:
+            if isinstance(item, dict):
+                item_details.append(f"{item.get('objectName', '?')}(progress={item.get('progress')},cost={item.get('cost')},spent={item.get('creditsSpent')})")
+        if item_details:
+            credits = payload.get("playerCredits", "?")
+            q_size = queue.get("size", "?")
+            q_max = queue.get("maxSize", "?")
+            tick = payload.get("tick", "?")
+            sys.stderr.write(f"[PLACE_DEBUG] tick={tick} queue={queue_type_name} status={queue_status_name} size={q_size}/{q_max} items={item_details} credits={credits}\n")
+            sys.stderr.flush()
+        if queue_status_name != "Ready":
             continue
         for item in items:
             if not isinstance(item, dict):
@@ -420,6 +461,9 @@ def _ready_place_building_names(payload: dict[str, Any]) -> set[str]:
             object_name = item.get("objectName")
             if isinstance(object_name, str) and object_name in PLACE_BUILDING_NAMES:
                 ready_names.add(object_name)
+    if ready_names:
+        sys.stderr.write(f"[PLACE_DEBUG] ready_building_names={ready_names}\n")
+        sys.stderr.flush()
     return ready_names
 
 
@@ -453,10 +497,18 @@ def _allowed_family_names(payload: dict[str, Any]) -> list[str]:
     self_building_count = _self_building_count(payload)
 
     allowed: list[str] = []
-    has_order_units = _selected_have_mobile_units(payload) or bool(selected_names & DEPLOYABLE_OBJECT_NAMES)
+    # Allow Order if the current selection has mobile units, OR if the player owns any mobile unit
+    # (the model's commanded-units head will pick which units to command).
+    has_order_units = (
+        _selected_have_mobile_units(payload)
+        or bool(selected_names & DEPLOYABLE_OBJECT_NAMES)
+        or _any_owned_mobile_units(payload)
+    )
     if has_order_units:
         allowed.append("Order")
-    if available_add_names or queued_names:
+    # Allow Queue if there are available objects, queued objects, or any production queue exists.
+    # This prevents Queue from being permanently blocked when buildings are in-progress.
+    if available_add_names or queued_names or _has_any_production_queue(payload):
         allowed.append("Queue")
     if ready_building_names:
         allowed.append("PlaceBuilding")
@@ -503,11 +555,55 @@ def _allowed_target_mode_names(order_type_name: str | None) -> list[str]:
     return []
 
 
+def _actively_building_structure_names(payload: dict[str, Any]) -> set[str]:
+    """Return names of buildings currently being constructed in the Structures queue.
+
+    When the Structures queue has status 'Active' and contains exactly one item
+    that is a placeable building, cancelling it would reset construction progress.
+    We suppress Cancel for these items so the model doesn't oscillate Add/Cancel.
+    """
+    player_production = payload.get("playerProduction") or {}
+    queues = player_production.get("queues", [])
+    names: set[str] = set()
+    if not isinstance(queues, list):
+        return names
+    for queue in queues:
+        if not isinstance(queue, dict):
+            continue
+        if queue.get("typeName") != "Structures":
+            continue
+        if queue.get("statusName") != "Active":
+            continue
+        items = queue.get("items", [])
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            obj = item.get("objectName")
+            if isinstance(obj, str) and obj in PLACE_BUILDING_NAMES:
+                names.add(obj)
+    return names
+
+
+def _cancellable_queued_object_names(payload: dict[str, Any]) -> set[str]:
+    """Return queued object names that are eligible for cancellation.
+
+    Excludes buildings actively under construction in the Structures queue,
+    since cancelling them would waste progress and the model tends to
+    oscillate between Add and Cancel when few other actions are available.
+    """
+    queued = _queued_object_names(payload)
+    actively_building = _actively_building_structure_names(payload)
+    return queued - actively_building
+
+
 def _allowed_queue_update_type_names(payload: dict[str, Any]) -> list[str]:
     allowed: list[str] = []
     if _available_add_object_names(payload):
         allowed.append("Add")
-    if _queued_object_names(payload):
+    cancellable = _cancellable_queued_object_names(payload)
+    if cancellable:
         allowed.extend(["Cancel", "AddNext"])
     return [name for name in LABEL_LAYOUT_V2_QUEUE_UPDATE_TYPES if name in allowed]
 
@@ -519,7 +615,9 @@ def _allowed_buildable_object_names(payload: dict[str, Any], family_name: str, q
         return set()
     if queue_update_type_name == "Add":
         return _available_add_object_names(payload)
-    if queue_update_type_name in {"Cancel", "AddNext"}:
+    if queue_update_type_name == "Cancel":
+        return _cancellable_queued_object_names(payload)
+    if queue_update_type_name == "AddNext":
         return _queued_object_names(payload)
     return set()
 
@@ -588,7 +686,12 @@ def build_policy_action(
 
     allowed_family_names = _allowed_family_names(feature_payload)
     if not allowed_family_names:
+        sys.stderr.write(f"[NOOP_DEBUG] no_legal_family! tick={feature_payload.get('tick')}\n")
+        sys.stderr.flush()
         return _build_noop_output(note="no_legal_family_from_live_state")
+    else:
+        sys.stderr.write(f"[NOOP_DEBUG] allowed={allowed_family_names} tick={feature_payload.get('tick')}\n")
+        sys.stderr.flush()
 
     family_logits = _mask_invalid_logits(
         outputs["actionFamilyLogits"][0],
