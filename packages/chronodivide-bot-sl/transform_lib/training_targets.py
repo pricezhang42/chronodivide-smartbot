@@ -485,7 +485,7 @@ def build_training_targets_v2(
     target_mode_semantic_mask = order_active.to(torch.int32).unsqueeze(1)
     queue_flag_semantic_mask = order_active.to(torch.int32).unsqueeze(1)
     queue_update_type_semantic_mask = queue_active.to(torch.int32).unsqueeze(1)
-    buildable_object_semantic_mask = (queue_active | place_building_active).to(torch.int32).unsqueeze(1)
+    buildable_object_semantic_mask = queue_active.to(torch.int32).unsqueeze(1)
     super_weapon_type_semantic_mask = super_weapon_active.to(torch.int32).unsqueeze(1)
     commanded_units_semantic_mask = order_active.to(torch.int32).unsqueeze(1)
     target_entity_semantic_mask = ((order_active & target_mode_object_active) | sell_or_toggle_active).to(torch.int32).unsqueeze(1)
@@ -616,7 +616,7 @@ def build_training_targets_v2(
             "This sidecar expands canonical V2 labels into hierarchical model-ready targets and masks.",
             "Standalone SelectUnitsAction is folded out before these targets are derived.",
             "Queue Hold and Resume are excluded from the current-stage V2 supervised action space.",
-            "Buildable object supervision is shared by queue item actions and PlaceBuilding.",
+            "Buildable object supervision applies only to Queue actions; PlaceBuilding is deterministic and excluded.",
         ],
     }
 
