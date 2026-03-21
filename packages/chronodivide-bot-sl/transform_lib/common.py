@@ -144,12 +144,23 @@ class TransformConfig:
     minimap_size: int
     overwrite: bool
     fail_fast: bool
+    workers: int
 
 
 @dataclass
 class TransformRunState:
     action_type_counts: dict[str, int] = field(default_factory=dict)
     unseen_action_type_counts: dict[str, int] = field(default_factory=dict)
+
+
+def merge_run_states(states: list[TransformRunState]) -> TransformRunState:
+    merged = TransformRunState()
+    for state in states:
+        for name, count in state.action_type_counts.items():
+            merged.action_type_counts[name] = merged.action_type_counts.get(name, 0) + count
+        for name, count in state.unseen_action_type_counts.items():
+            merged.unseen_action_type_counts[name] = merged.unseen_action_type_counts.get(name, 0) + count
+    return merged
 
 
 def parse_args(argv: list[str]) -> TransformConfig:
@@ -186,6 +197,7 @@ def parse_args(argv: list[str]) -> TransformConfig:
     parser.add_argument("--minimap-size", type=int, default=64)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--fail-fast", action="store_true")
+    parser.add_argument("--workers", type=int, default=1, help="Number of parallel worker processes (default: 1, sequential).")
 
     args = parser.parse_args(argv)
     resolved_output_dir = args.output_dir.resolve()
@@ -224,6 +236,7 @@ def parse_args(argv: list[str]) -> TransformConfig:
         minimap_size=args.minimap_size,
         overwrite=bool(args.overwrite),
         fail_fast=bool(args.fail_fast),
+        workers=max(1, int(args.workers)),
     )
 
 

@@ -60,6 +60,7 @@ from transform_lib.common import (
     ensure_parent,
     iter_progress,
     list_replays,
+    merge_run_states,
     parse_args,
     player_output_stem,
     utc_now_iso,
@@ -577,11 +578,30 @@ def write_manifest(
     return manifest_path
 
 
+def _transform_single_replay_worker(
+    args: tuple[TransformConfig, Path],
+) -> tuple[list[dict[str, Any]], TransformRunState, dict[str, Any] | None]:
+    """Worker function for parallel replay processing.
+
+    Returns (shard_results, per_replay_run_state, error_or_none).
+    """
+    config, replay_path = args
+    run_state = TransformRunState()
+    try:
+        shard_results = transform_single_replay(config, replay_path, run_state)
+        return shard_results, run_state, None
+    except Exception as exc:
+        return [], run_state, {
+            "replay": str(replay_path),
+            "errorType": exc.__class__.__name__,
+            "error": str(exc),
+        }
+
+
 def main(argv: list[str]) -> int:
     config = parse_args(argv)
     validate_config(config)
     config.output_dir.mkdir(parents=True, exist_ok=True)
-    run_state = TransformRunState()
 
     replay_paths = list_replays(config)
     if not replay_paths:
@@ -591,23 +611,55 @@ def main(argv: list[str]) -> int:
 
     results: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    worker_states: list[TransformRunState] = []
 
-    for replay_path in iter_progress(replay_paths, "Transform replays"):
+    if config.workers > 1:
+        import concurrent.futures
+
         try:
-            results.extend(transform_single_replay(config, replay_path, run_state))
-        except Exception as exc:  # pragma: no cover - failure path exercised by real runs
-            errors.append(
-                {
-                    "replay": str(replay_path),
-                    "errorType": exc.__class__.__name__,
-                    "error": str(exc),
-                }
-            )
-            if config.fail_fast:
-                raise
+            from tqdm import tqdm as _tqdm
+        except ImportError:
+            _tqdm = None
 
-    finalize_training_target_sidecars(config, results, build_global_action_type_vocabulary(run_state))
-    manifest_path = write_manifest(config, replay_paths, results, errors, run_state)
+        print(f"Using {config.workers} worker processes for {len(replay_paths)} replay(s).")
+        work_items = [(config, replay_path) for replay_path in replay_paths]
+        with concurrent.futures.ProcessPoolExecutor(max_workers=config.workers) as executor:
+            futures = {
+                executor.submit(_transform_single_replay_worker, item): item
+                for item in work_items
+            }
+            completed_iter = concurrent.futures.as_completed(futures)
+            if _tqdm is not None:
+                completed_iter = _tqdm(completed_iter, total=len(futures), desc="Transform replays")
+            for future in completed_iter:
+                shard_results, worker_run_state, error = future.result()
+                results.extend(shard_results)
+                worker_states.append(worker_run_state)
+                if error is not None:
+                    errors.append(error)
+                    if config.fail_fast:
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        raise RuntimeError(error["error"])
+    else:
+        run_state = TransformRunState()
+        for replay_path in iter_progress(replay_paths, "Transform replays"):
+            try:
+                results.extend(transform_single_replay(config, replay_path, run_state))
+            except Exception as exc:  # pragma: no cover - failure path exercised by real runs
+                errors.append(
+                    {
+                        "replay": str(replay_path),
+                        "errorType": exc.__class__.__name__,
+                        "error": str(exc),
+                    }
+                )
+                if config.fail_fast:
+                    raise
+        worker_states.append(run_state)
+
+    merged_run_state = merge_run_states(worker_states)
+    finalize_training_target_sidecars(config, results, build_global_action_type_vocabulary(merged_run_state))
+    manifest_path = write_manifest(config, replay_paths, results, errors, merged_run_state)
     print(f"Processed {len(replay_paths)} replay(s).")
     print(f"Saved {sum(1 for result in results if result['status'] == 'saved')} shard(s).")
     print(f"Training targets: {sum(1 for result in results if result.get('trainingTargetTensorPath'))} shard(s).")
