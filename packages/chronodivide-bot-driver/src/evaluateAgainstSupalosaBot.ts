@@ -14,6 +14,7 @@ import { CheckpointControlBot } from "../../chronodivide-bot/dist/bot/checkpoint
 import { Countries } from "../../chronodivide-bot/dist/bot/logic/common/utils.js";
 import { createProductionAdvisor } from "../../chronodivide-bot/dist/bot/logic/building/productionAdvisorFactory.js";
 import { NullProductionAdvisor } from "../../chronodivide-bot/dist/bot/logic/building/nullProductionAdvisor.js";
+import { DummyBot } from "./dummyBot/dummyBot.js";
 
 const DEFAULT_MAP_NAME = "2_pinch_point_le.map";
 const DEFAULT_MATCH_COUNT = 3;
@@ -21,7 +22,7 @@ const DEFAULT_MAX_TICKS = 12000;
 const DEFAULT_SAMPLE_INTERVAL_TICKS = 15;
 const DEFAULT_OUTPUT_DIR = path.resolve(process.cwd(), "arena-eval-results");
 
-type BotMode = "baseline" | "advisor" | "control";
+type BotMode = "baseline" | "advisor" | "control" | "dummy";
 
 type LiveControlBotStats = {
     predictedFamilyCounts: Record<string, number>;
@@ -142,7 +143,7 @@ function parseCountry(rawValue: string | undefined, fallback: Countries): Countr
 
 function parseBotMode(rawValue: string | undefined, fallback: BotMode): BotMode {
     const value = rawValue?.trim().toLowerCase();
-    if (value === "baseline" || value === "advisor" || value === "control") {
+    if (value === "baseline" || value === "advisor" || value === "control" || value === "dummy") {
         return value;
     }
     return fallback;
@@ -188,7 +189,7 @@ function buildBot(
     country: Countries,
     allies: string[],
     checkpointPath: string | null,
-): SupalosaBot | CheckpointControlBot {
+): SupalosaBot | CheckpointControlBot | DummyBot {
     if (mode === "control") {
         return new CheckpointControlBot(
             name,
@@ -199,11 +200,14 @@ function buildBot(
             process.env.SL_PYTHON_EXECUTABLE ?? "python",
         );
     }
+    if (mode === "dummy") {
+        return new DummyBot(name, country);
+    }
     const advisor = mode === "advisor" ? createProductionAdvisor() : new NullProductionAdvisor();
     return new SupalosaBot(name, country, allies, true, undefined, advisor);
 }
 
-async function waitForAdvisorRequests(bots: Array<SupalosaBot | CheckpointControlBot>): Promise<void> {
+async function waitForAdvisorRequests(bots: Array<SupalosaBot | CheckpointControlBot | DummyBot>): Promise<void> {
     const pendingBots = bots.filter((bot) => {
         const candidate = bot as unknown as {
             hasPendingProductionAdvisorRequest?: () => boolean;
@@ -429,7 +433,7 @@ function summarizeTrackedPlayer(tracker: PlayerTracker, defeated: boolean): Matc
     };
 }
 
-function getLiveControlStats(bot: SupalosaBot | CheckpointControlBot): LiveControlBotStats | null {
+function getLiveControlStats(bot: SupalosaBot | CheckpointControlBot | DummyBot): LiveControlBotStats | null {
     const candidate = bot as unknown as {
         getLiveControlStats?: () => LiveControlBotStats;
     };
@@ -524,8 +528,8 @@ async function runMatch(args: ParsedArgs, matchIndex: number): Promise<MatchSumm
         };
     } finally {
         game?.dispose();
-        await candidateBot.dispose();
-        await opponentBot.dispose();
+        if ("dispose" in candidateBot && typeof candidateBot.dispose === "function") await candidateBot.dispose();
+        if ("dispose" in opponentBot && typeof opponentBot.dispose === "function") await opponentBot.dispose();
     }
 }
 

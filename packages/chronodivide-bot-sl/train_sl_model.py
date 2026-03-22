@@ -75,6 +75,11 @@ class TrainConfig:
     post_train_arena_eval_opponent_mode: str
     post_train_arena_eval_opponent_country: str
     post_train_arena_eval_mix_dir: Path | None
+    # Pseudo-reward settings.
+    pseudo_reward_enabled: bool
+    pseudo_reward_production_boost: float
+    pseudo_reward_non_noop_boost: float
+    composition_aux_scale: float
 
 
 def utc_now_iso() -> str:
@@ -166,6 +171,18 @@ def parse_args() -> TrainConfig:
     )
     parser.add_argument("--post-train-arena-eval-opponent-country", type=str, default="IRAQ")
     parser.add_argument("--post-train-arena-eval-mix-dir", type=Path, default=None)
+    # Pseudo-reward arguments.
+    parser.add_argument(
+        "--pseudo-reward-enabled",
+        action="store_true",
+        help="Enable pseudo-reward sample importance weighting (upweight production/non-Noop samples).",
+    )
+    parser.add_argument("--pseudo-reward-production-boost", type=float, default=3.0,
+                        help="Weight multiplier for Queue/PlaceBuilding samples.")
+    parser.add_argument("--pseudo-reward-non-noop-boost", type=float, default=1.5,
+                        help="Weight multiplier for non-Noop samples.")
+    parser.add_argument("--composition-aux-scale", type=float, default=0.0,
+                        help="Scale for composition prediction auxiliary loss (0 = disabled).")
 
     args = parser.parse_args()
     if args.window_size <= 0:
@@ -222,6 +239,10 @@ def parse_args() -> TrainConfig:
             if args.post_train_arena_eval_mix_dir is not None
             else None
         ),
+        pseudo_reward_enabled=bool(args.pseudo_reward_enabled),
+        pseudo_reward_production_boost=args.pseudo_reward_production_boost,
+        pseudo_reward_non_noop_boost=args.pseudo_reward_non_noop_boost,
+        composition_aux_scale=args.composition_aux_scale,
     )
 
 
@@ -464,6 +485,8 @@ def run_epoch(
     grad_clip_norm: float,
     action_type_class_weights: torch.Tensor | None,
     teacher_forcing_mode: str,
+    pseudo_reward_config: "PseudoRewardConfig | None" = None,
+    composition_aux_scale: float = 0.0,
 ) -> dict[str, float]:
     training = optimizer is not None
     if training:
@@ -489,6 +512,8 @@ def run_epoch(
                 outputs,
                 batch,
                 action_type_class_weights=action_type_class_weights,
+                pseudo_reward_config=pseudo_reward_config,
+                composition_aux_scale=composition_aux_scale,
             )
             if training:
                 loss_output.total_loss.backward()
@@ -626,11 +651,18 @@ def main() -> None:
     device = resolve_device(config)
     if action_type_class_weights is not None:
         action_type_class_weights = action_type_class_weights.to(device)
+    # Determine composition vocabulary size for the auxiliary head.
+    composition_aux_size = 0
+    if config.composition_aux_scale > 0:
+        from transform_lib.feature_layout import OWNED_COMPOSITION_VOCABULARY
+        composition_aux_size = len(OWNED_COMPOSITION_VOCABULARY)
+
     model = RA2SLBaselineModel(
         RA2SLBaselineConfig(
             entity_name_vocab_size=entity_name_vocab_size,
             use_lstm_core=config.use_lstm_core,
             lstm_num_layers=config.lstm_num_layers,
+            composition_aux_size=composition_aux_size,
         )
     ).to(device)
     optimizer = torch.optim.AdamW(
@@ -649,7 +681,7 @@ def main() -> None:
     }
     if config.resume is not None:
         checkpoint = torch.load(config.resume, map_location=device)
-        model.load_state_dict(checkpoint["model"])
+        model.load_state_dict(checkpoint["model"], strict=False)
         optimizer.load_state_dict(checkpoint["optimizer"])
         scheduler.load_state_dict(checkpoint["scheduler"])
         start_epoch = int(checkpoint["epoch"]) + 1
@@ -696,6 +728,16 @@ def main() -> None:
     if start_epoch == 0 and history_path.exists():
         history_path.unlink()
 
+    # Build pseudo-reward config if enabled.
+    pseudo_reward_config = None
+    if config.pseudo_reward_enabled:
+        from model_lib.pseudo_reward import PseudoRewardConfig
+        pseudo_reward_config = PseudoRewardConfig(
+            enabled=True,
+            production_action_boost=config.pseudo_reward_production_boost,
+            non_noop_boost=config.pseudo_reward_non_noop_boost,
+        )
+
     last_train_metrics: dict[str, float] | None = None
     last_val_metrics: dict[str, float] | None = None
     last_val_free_metrics: dict[str, float] | None = None
@@ -708,6 +750,8 @@ def main() -> None:
             grad_clip_norm=config.grad_clip_norm,
             action_type_class_weights=action_type_class_weights,
             teacher_forcing_mode=config.teacher_forcing_mode,
+            pseudo_reward_config=pseudo_reward_config,
+            composition_aux_scale=config.composition_aux_scale,
         )
         val_metrics = None
         val_free_metrics = None
@@ -720,6 +764,8 @@ def main() -> None:
                 grad_clip_norm=config.grad_clip_norm,
                 action_type_class_weights=action_type_class_weights,
                 teacher_forcing_mode=config.teacher_forcing_mode,
+                pseudo_reward_config=pseudo_reward_config,
+                composition_aux_scale=config.composition_aux_scale,
             )
             val_free_metrics = run_free_running_eval_epoch(
                 model=model,

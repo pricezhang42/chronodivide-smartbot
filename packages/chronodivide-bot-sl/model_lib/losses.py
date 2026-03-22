@@ -15,6 +15,20 @@ def _masked_mean(values: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     return (values * mask_float).sum() / denom
 
 
+def _masked_weighted_mean(
+    values: torch.Tensor,
+    mask: torch.Tensor,
+    sample_weights: torch.Tensor | None,
+) -> torch.Tensor:
+    """Weighted masked mean. Falls back to _masked_mean when sample_weights is None."""
+    if sample_weights is None:
+        return _masked_mean(values, mask)
+    mask_float = mask.to(values.dtype)
+    weights = sample_weights.to(values.dtype) * mask_float
+    denom = torch.clamp(weights.sum(), min=1.0)
+    return (values * weights).sum() / denom
+
+
 def _one_hot_to_index(one_hot: torch.Tensor) -> torch.Tensor:
     return torch.argmax(one_hot.to(torch.float32), dim=-1)
 
@@ -38,9 +52,10 @@ def _masked_classification_loss(
     mask: torch.Tensor,
     *,
     class_weights: torch.Tensor | None = None,
+    sample_weights: torch.Tensor | None = None,
 ) -> torch.Tensor:
     loss = F.cross_entropy(logits, targets, reduction="none", weight=class_weights)
-    return _masked_mean(loss, mask)
+    return _masked_weighted_mean(loss, mask, sample_weights)
 
 
 def _masked_accuracy(logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -75,11 +90,17 @@ def _resize_spatial_target_one_hot(target_one_hot: torch.Tensor, target_hw: tupl
     return resized.reshape(*target_one_hot.shape[:-2], target_height, target_width)
 
 
-def _masked_spatial_loss(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+def _masked_spatial_loss(
+    logits: torch.Tensor,
+    target_one_hot: torch.Tensor,
+    mask: torch.Tensor,
+    *,
+    sample_weights: torch.Tensor | None = None,
+) -> torch.Tensor:
     target_one_hot = _resize_spatial_target_one_hot(target_one_hot, logits.shape[-2:])
     flat_logits = logits.reshape(-1, logits.shape[-2] * logits.shape[-1])
     flat_targets = _one_hot_to_index(target_one_hot.reshape(-1, target_one_hot.shape[-2] * target_one_hot.shape[-1]))
-    return _masked_classification_loss(flat_logits, flat_targets, mask.reshape(-1))
+    return _masked_classification_loss(flat_logits, flat_targets, mask.reshape(-1), sample_weights=sample_weights)
 
 
 def _masked_spatial_accuracy(logits: torch.Tensor, target_one_hot: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -89,11 +110,17 @@ def _masked_spatial_accuracy(logits: torch.Tensor, target_one_hot: torch.Tensor,
     return _masked_accuracy(flat_logits, flat_targets, mask.reshape(-1))
 
 
-def _masked_quantity_loss(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+def _masked_quantity_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    mask: torch.Tensor,
+    *,
+    sample_weights: torch.Tensor | None = None,
+) -> torch.Tensor:
     flat_pred = pred.squeeze(-1).reshape(-1)
     flat_target = target.to(torch.float32).squeeze(-1).reshape(-1)
     value_loss = F.smooth_l1_loss(flat_pred, flat_target, reduction="none")
-    return _masked_mean(value_loss, mask.reshape(-1))
+    return _masked_weighted_mean(value_loss, mask.reshape(-1), sample_weights)
 
 
 def _masked_quantity_accuracy(pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -328,7 +355,18 @@ def compute_ra2_sl_loss(
     batch: dict[str, Any],
     *,
     action_type_class_weights: torch.Tensor | None = None,
+    pseudo_reward_config: "PseudoRewardConfig | None" = None,
+    composition_aux_scale: float = 0.0,
 ) -> RA2SLLossOutput:
+    """Compute RA2 supervised learning loss with optional pseudo-reward weighting.
+
+    When pseudo_reward_config is provided and enabled, per-sample importance
+    weights are computed based on action type (production actions get higher
+    weight, Noop gets lower weight).
+
+    When composition_aux_scale > 0 and the model outputs compositionPred,
+    a composition prediction auxiliary loss is added (Hamming-distance inspired).
+    """
     targets = batch["training_targets"]
     masks = batch["training_masks"]
 
@@ -348,6 +386,19 @@ def compute_ra2_sl_loss(
     target_location_mask = masks["targetLocationLossMask"].squeeze(-1) > 0
     target_location2_mask = masks["targetLocation2LossMask"].squeeze(-1) > 0
     quantity_mask = masks["quantityLossMask"].squeeze(-1) > 0
+
+    # --- Compute per-sample importance weights (pseudo-reward weighting) ---
+    sample_weights: torch.Tensor | None = None
+    if pseudo_reward_config is not None and pseudo_reward_config.enabled:
+        from model_lib.pseudo_reward import compute_sample_importance_weights
+        sample_weights = compute_sample_importance_weights(
+            batch,
+            pseudo_reward_config,
+            noop_family_index=0,
+        )
+        # Ensure sample_weights is on the right device and flattened.
+        device = action_type_targets.device
+        sample_weights = sample_weights.to(device)
 
     flat_action_type_logits, flat_action_type_targets, flat_action_type_mask = _flatten_logits_and_targets(
         outputs["actionTypeLogits"],
@@ -369,15 +420,24 @@ def compute_ra2_sl_loss(
         flat_action_type_targets,
         flat_action_type_mask,
         class_weights=action_type_class_weights,
+        sample_weights=sample_weights,
     )
-    delay_loss = _masked_classification_loss(flat_delay_logits, flat_delay_targets, flat_delay_mask)
-    queue_loss = _masked_classification_loss(flat_queue_logits, flat_queue_targets, flat_queue_mask)
+    delay_loss = _masked_classification_loss(
+        flat_delay_logits, flat_delay_targets, flat_delay_mask,
+        sample_weights=sample_weights,
+    )
+    queue_loss = _masked_classification_loss(
+        flat_queue_logits, flat_queue_targets, flat_queue_mask,
+        sample_weights=sample_weights,
+    )
 
     units_logits, units_target_flat, units_mask_flat = _flatten_logits_and_targets(
         outputs["unitsLogits"],
         units_autoregressive_targets.target_ids,
         units_autoregressive_targets.target_mask,
     )
+    # Note: units loss has a different sample count (expanded by sequence steps),
+    # so we don't apply sample_weights directly here to avoid shape mismatch.
     units_loss = _masked_classification_loss(units_logits, units_target_flat, units_mask_flat)
 
     flat_target_entity_logits, flat_target_entity_targets, flat_target_entity_mask = _flatten_logits_and_targets(
@@ -389,18 +449,24 @@ def compute_ra2_sl_loss(
         flat_target_entity_logits,
         flat_target_entity_targets,
         flat_target_entity_mask,
+        sample_weights=sample_weights,
     )
     target_location_loss = _masked_spatial_loss(
         outputs["targetLocationLogits"],
         targets["targetLocationOneHot"],
         target_location_mask,
+        sample_weights=sample_weights,
     )
     target_location2_loss = _masked_spatial_loss(
         outputs["targetLocation2Logits"],
         targets["targetLocation2OneHot"],
         target_location2_mask,
+        sample_weights=sample_weights,
     )
-    quantity_loss = _masked_quantity_loss(outputs["quantityPred"], targets["quantityValue"], quantity_mask)
+    quantity_loss = _masked_quantity_loss(
+        outputs["quantityPred"], targets["quantityValue"], quantity_mask,
+        sample_weights=sample_weights,
+    )
 
     loss_by_head = {
         "actionType": action_type_loss,
@@ -412,6 +478,30 @@ def compute_ra2_sl_loss(
         "targetLocation2": target_location2_loss,
         "quantity": quantity_loss,
     }
+
+    # --- Auxiliary losses: composition prediction (Hamming-distance inspired) ---
+    if (
+        composition_aux_scale > 0
+        and "compositionPred" in outputs
+        and "ownedCompositionBow" in batch.get("feature_sections", {})
+    ):
+        from model_lib.pseudo_reward import composition_prediction_loss
+
+        composition_target = batch["feature_sections"]["ownedCompositionBow"]
+        # ownedCompositionBow is [batch, (seq_len,) 2, vocab_size] — flatten rows to [N, vocab_size]
+        # Sum units + buildings rows to get total composition.
+        if composition_target.ndim >= 3:
+            composition_target = composition_target.sum(dim=-2)  # [..., vocab_size]
+        composition_pred = outputs["compositionPred"]
+        # Create a mask: all samples are valid for composition prediction.
+        comp_mask = torch.ones(
+            composition_pred.reshape(-1, composition_pred.shape[-1]).shape[0],
+            dtype=torch.bool,
+            device=composition_pred.device,
+        )
+        comp_loss = composition_prediction_loss(composition_pred, composition_target, comp_mask)
+        loss_by_head["compositionAux"] = comp_loss * composition_aux_scale
+
     total_loss = sum(loss_by_head.values())
 
     metrics = {
@@ -440,9 +530,18 @@ def compute_ra2_sl_loss(
             quantity_mask,
         ),
     }
+    if sample_weights is not None:
+        metrics["pseudoRewardAvgWeight"] = sample_weights.mean()
+    if "compositionAux" in loss_by_head:
+        metrics["compositionAuxLoss"] = loss_by_head["compositionAux"].detach()
 
     return RA2SLLossOutput(
         total_loss=total_loss,
         loss_by_head=loss_by_head,
         metrics=metrics,
     )
+
+
+# Type import for annotation only.
+if False:
+    from model_lib.pseudo_reward import PseudoRewardConfig

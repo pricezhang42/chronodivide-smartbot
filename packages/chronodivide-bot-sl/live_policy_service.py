@@ -146,8 +146,91 @@ def _decode_target_entity(target_entity_logits: torch.Tensor, payload: dict[str,
     return entity_ids[best_index], float(target_entity_logits[best_index].item())
 
 
-def _decode_commanded_unit_ids(outputs: dict[str, torch.Tensor], payload: dict[str, Any]) -> list[int]:
+def _build_entity_order_mask(
+    payload: dict[str, Any], order_type_name: str | None
+) -> list[bool]:
+    """Build a per-entity boolean mask: True if entity is valid for the given order type.
+
+    An entity is valid when it is:
+    1. Owned by self (relation_self > 0.5)
+    2. Capable of executing the order (e.g. can_move for Move, matching name for Deploy)
+    """
+    entity_features = (payload.get("featureTensors") or {}).get("entityFeatures", [])
+    entity_mask_raw = (payload.get("featureTensors") or {}).get("entityMask", [])
+    feature_names = (payload.get("featureSchemaObservation") or {}).get("entityFeatureNames", [])
+    if not isinstance(entity_features, list) or not isinstance(feature_names, list):
+        return []
+
+    def _fidx(name: str) -> int:
+        return feature_names.index(name) if name in feature_names else -1
+
+    idx_relation_self = _fidx("relation_self")
+    idx_can_move = _fidx("can_move")
+
+    num_entities = len(entity_features)
+    mask: list[bool] = [False] * num_entities
+
+    # Pre-compute entity names for Deploy/Harvest checks.
+    entity_names: list[str | None] = [None] * num_entities
+    need_names = order_type_name in (
+        {"Deploy", "DeploySelected"} | HARVESTER_OBJECT_NAMES
+        if order_type_name else set()
+    )
+    if order_type_name in {"Deploy", "DeploySelected", "Gather", "Dock"}:
+        for i in range(num_entities):
+            entity_names[i] = _entity_name_from_row(payload, i)
+
+    for i in range(num_entities):
+        if isinstance(entity_mask_raw, list) and i < len(entity_mask_raw) and int(entity_mask_raw[i]) <= 0:
+            continue
+        features = entity_features[i]
+        if not isinstance(features, list):
+            continue
+
+        # Must be self-owned.
+        if idx_relation_self < 0 or idx_relation_self >= len(features):
+            continue
+        if float(features[idx_relation_self]) <= 0.5:
+            continue
+
+        # Check capability based on order type.
+        is_mobile = (
+            idx_can_move >= 0 and idx_can_move < len(features) and float(features[idx_can_move]) > 0.5
+        )
+
+        if order_type_name in {"Deploy", "DeploySelected"}:
+            name = entity_names[i]
+            if name and name in DEPLOYABLE_OBJECT_NAMES:
+                mask[i] = True
+        elif order_type_name in {"Gather", "Dock"}:
+            name = entity_names[i]
+            if name and name in HARVESTER_OBJECT_NAMES:
+                mask[i] = True
+        else:
+            # All other orders require can_move.
+            if is_mobile:
+                mask[i] = True
+
+    return mask
+
+
+def _decode_commanded_unit_ids(
+    outputs: dict[str, torch.Tensor],
+    payload: dict[str, Any],
+    entity_order_mask: list[bool] | None = None,
+) -> list[int]:
+    """Decode commanded unit IDs from model outputs.
+
+    When entity_order_mask is provided, re-selects units from the model's
+    per-step logits restricted to valid (owned + capable) entities. This
+    prevents selecting enemy units, buildings, or other invalid targets.
+    """
     entity_ids = _entity_object_ids(payload)
+
+    if entity_order_mask and any(entity_order_mask):
+        return _decode_commanded_unit_ids_masked(outputs, entity_ids, entity_order_mask)
+
+    # Fallback: use the model's raw selections (no additional filtering).
     selected_ids = outputs["commandedUnitsSelectedIds"][0]
     selected_mask = outputs["commandedUnitsSelectedMask"][0]
     resolved: list[int] = []
@@ -161,6 +244,61 @@ def _decode_commanded_unit_ids(outputs: dict[str, torch.Tensor], payload: dict[s
         if object_id < 0 or object_id in resolved:
             continue
         resolved.append(object_id)
+    return resolved
+
+
+def _decode_commanded_unit_ids_masked(
+    outputs: dict[str, torch.Tensor],
+    entity_ids: list[int],
+    entity_order_mask: list[bool],
+) -> list[int]:
+    """Re-select units from commandedUnitsLogits with entity_order_mask applied.
+
+    For each autoregressive step, mask the logits to only allow valid entities,
+    then pick the best one. This mirrors the model's own selection loop but
+    restricted to entities the bot actually owns and can command.
+    """
+    # commandedUnitsLogits shape: [batch, num_steps, max_entities + 1]
+    # The last index is EOF.
+    logits = outputs["commandedUnitsLogits"][0]  # [num_steps, max_entities + 1]
+    num_steps, vocab_size = logits.shape
+    max_entities = vocab_size - 1  # Last index is EOF.
+    eof_index = max_entities
+
+    # Build the validity mask (True = allowed).
+    valid_entity_mask = torch.zeros(vocab_size, dtype=torch.bool, device=logits.device)
+    for i, allowed in enumerate(entity_order_mask):
+        if i < max_entities and allowed and i < len(entity_ids) and entity_ids[i] >= 0:
+            valid_entity_mask[i] = True
+    # Always allow EOF.
+    valid_entity_mask[eof_index] = True
+
+    if not valid_entity_mask[:max_entities].any():
+        return []
+
+    resolved: list[int] = []
+    remaining_mask = valid_entity_mask.clone()
+
+    for step_index in range(num_steps):
+        step_logits = logits[step_index].clone()
+        # Don't allow EOF on first step.
+        step_mask = remaining_mask.clone()
+        if step_index == 0:
+            step_mask[eof_index] = False
+        # If no valid entities remain, stop.
+        if not step_mask[:max_entities].any():
+            break
+        step_logits = step_logits.masked_fill(~step_mask, -1e9)
+        chosen_index = int(torch.argmax(step_logits).item())
+        if chosen_index == eof_index:
+            break
+        if chosen_index < len(entity_ids):
+            object_id = entity_ids[chosen_index]
+            if object_id >= 0 and object_id not in resolved:
+                resolved.append(object_id)
+        # Remove chosen entity from remaining candidates.
+        remaining_mask[chosen_index] = False
+
     return resolved
 
 
@@ -444,6 +582,54 @@ def _mask_invalid_logits(logits: torch.Tensor, allowed_indices: list[int]) -> to
     return logits.masked_fill(~mask, -1e9)
 
 
+REDUNDANT_ORDER_TICK_THRESHOLD = 60
+
+
+def _filter_redundant_order_units(
+    unit_ids: list[int], order_type: str | None, payload: dict[str, Any]
+) -> list[int]:
+    """Remove units that already have the same order type issued recently.
+
+    Uses the per-unit order tracking from runtimeState.lastOrderByUnitId.
+    Units with the same order issued within REDUNDANT_ORDER_TICK_THRESHOLD ticks
+    are filtered out, unless the unit is idle (from entity features).
+    """
+    if not order_type or not unit_ids:
+        return unit_ids
+    runtime_state = payload.get("runtimeState") or {}
+    last_orders = runtime_state.get("lastOrderByUnitId") or {}
+    if not isinstance(last_orders, dict):
+        return unit_ids
+
+    # Build a set of idle entity object IDs from entity features.
+    entity_ids = payload.get("entityObjectIds", [])
+    entity_features = (payload.get("featureTensors") or {}).get("entityFeatures", [])
+    feature_names = (payload.get("featureSchemaObservation") or {}).get("entityFeatureNames", [])
+    idle_index = feature_names.index("is_idle") if "is_idle" in feature_names else -1
+    idle_ids: set[int] = set()
+    if idle_index >= 0 and isinstance(entity_features, list) and isinstance(entity_ids, list):
+        for i, eid in enumerate(entity_ids):
+            if i < len(entity_features) and isinstance(entity_features[i], list):
+                row = entity_features[i]
+                if idle_index < len(row) and row[idle_index] > 0.5:
+                    idle_ids.add(int(eid))
+
+    filtered: list[int] = []
+    for uid in unit_ids:
+        uid_str = str(uid)
+        entry = last_orders.get(uid_str) or last_orders.get(uid)
+        if not isinstance(entry, dict):
+            filtered.append(uid)
+            continue
+        if entry.get("orderType") == order_type:
+            ticks_since = entry.get("ticksSinceOrder", 999)
+            if isinstance(ticks_since, (int, float)) and ticks_since < REDUNDANT_ORDER_TICK_THRESHOLD:
+                if uid not in idle_ids:
+                    continue  # Skip — recent same order and not idle.
+        filtered.append(uid)
+    return filtered
+
+
 def _apply_buildability_mask(
     spatial_logits: torch.Tensor, payload: dict[str, Any]
 ) -> torch.Tensor:
@@ -695,11 +881,18 @@ def build_policy_action(
         target_entity_id, _ = _decode_target_entity(outputs["targetEntityLogits"][0], feature_payload)
         target_location, _ = _decode_spatial_target(outputs["targetLocationLogits"][0], feature_payload)
         target_location_2, _ = _decode_spatial_target(outputs["targetLocation2Logits"][0], feature_payload)
+        entity_order_mask = _build_entity_order_mask(feature_payload, order_name)
+        raw_unit_ids = _decode_commanded_unit_ids(outputs, feature_payload, entity_order_mask)
+        if not raw_unit_ids:
+            return _build_noop_output(note=f"no_valid_units_for_{order_name}", debug=debug)
+        filtered_unit_ids = _filter_redundant_order_units(raw_unit_ids, order_name, feature_payload)
+        if not filtered_unit_ids:
+            return _build_noop_output(note=f"all_units_have_recent_{order_name}", debug=debug)
         output["order"] = {
             "orderType": order_name,
             "targetMode": TARGET_MODE_NAMES[target_mode_index] if target_mode_index < len(TARGET_MODE_NAMES) else None,
             "queueFlag": bool(torch.argmax(outputs["queueFlagLogits"][0]).item() == 1),
-            "unitIds": _decode_commanded_unit_ids(outputs, feature_payload),
+            "unitIds": filtered_unit_ids,
             "targetEntityId": target_entity_id,
             "targetLocation": target_location,
             "targetLocation2": target_location_2,

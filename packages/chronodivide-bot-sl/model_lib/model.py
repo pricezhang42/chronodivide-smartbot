@@ -207,6 +207,8 @@ class RA2SLBaselineConfig:
     use_lstm_core: bool = False
     lstm_num_layers: int = 1
     dropout: float = 0.1
+    # Auxiliary heads for pseudo-reward signals.
+    composition_aux_size: int = 0  # >0 enables composition prediction head (vocab size).
 
 
 class RA2SLBaselineModel(nn.Module):
@@ -244,6 +246,15 @@ class RA2SLBaselineModel(nn.Module):
                 dropout=config.dropout,
             )
         )
+        # Auxiliary heads for pseudo-reward signals.
+        self.composition_head: nn.Module | None = None
+        if config.composition_aux_size > 0:
+            from model_lib.pseudo_reward import CompositionPredictionHead
+            self.composition_head = CompositionPredictionHead(
+                latent_dim=config.fusion_hidden_dim,
+                composition_size=config.composition_aux_size,
+                dropout=config.dropout,
+            )
 
     def forward(
         self,
@@ -294,7 +305,12 @@ class RA2SLBaselineModel(nn.Module):
                 name: tensor.reshape(batch_size, sequence_length, *tensor.shape[1:])
                 for name, tensor in head_outputs.items()
             }
-            return {**core_outputs, **reshaped_head_outputs}
+            result = {**core_outputs, **reshaped_head_outputs}
+            if self.composition_head is not None:
+                flat_fused = flatten_sequence_tensor(core_outputs["fused_latent"])
+                comp_pred = self.composition_head(flat_fused)
+                result["compositionPred"] = comp_pred.reshape(batch_size, sequence_length, *comp_pred.shape[1:])
+            return result
 
         head_outputs = self.heads(
             fused_latent=fused_latent,
@@ -306,4 +322,7 @@ class RA2SLBaselineModel(nn.Module):
             teacher_forcing_masks=teacher_forcing_masks,
             teacher_forcing_mode=teacher_forcing_mode,
         )
-        return {**core_outputs, **head_outputs}
+        result = {**core_outputs, **head_outputs}
+        if self.composition_head is not None:
+            result["compositionPred"] = self.composition_head(fused_latent)
+        return result

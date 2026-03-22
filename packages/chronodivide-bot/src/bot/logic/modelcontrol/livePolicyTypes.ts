@@ -67,6 +67,7 @@ export type LivePolicyRuntimeState = {
     recentOrderTypeNamesV2?: string[];
     pendingBuildingQueueByQueueName?: Record<string, string>;
     lastFailedActionReason?: string | null;
+    lastOrderByUnitId?: Record<number, { orderType: string; ticksSinceOrder: number }>;
 };
 
 export type LivePolicyReplayPlayer = {
@@ -112,6 +113,7 @@ export type LivePolicyFeaturePayload = {
     playerSuperWeapons: Array<Record<string, unknown>>;
     replayPlayers: LivePolicyReplayPlayer[];
     superWeaponRechargeSecondsByType: Record<string, number | null>;
+    liveBuildabilityMask: number[][] | null;
     runtimeState: LivePolicyRuntimeState;
 };
 
