@@ -296,6 +296,7 @@ def compute_ra2_sl_v2_loss(
     batch: dict[str, Any],
     *,
     action_family_class_weights: torch.Tensor | None = None,
+    order_type_class_weights: torch.Tensor | None = None,
 ) -> RA2SLLossOutput:
     targets = batch["training_targets"]
     masks = batch["training_masks"]
@@ -375,6 +376,7 @@ def compute_ra2_sl_v2_loss(
         flat_order_type_logits,
         flat_order_type_targets,
         flat_order_type_mask,
+        class_weights=order_type_class_weights,
     )
     target_mode_loss = _masked_classification_loss(
         flat_target_mode_logits,

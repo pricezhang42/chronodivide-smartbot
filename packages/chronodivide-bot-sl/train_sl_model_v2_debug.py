@@ -59,6 +59,9 @@ class TrainConfigV2Debug:
     action_family_weight_min: float
     action_family_weight_max: float
     place_building_weight_multiplier: float
+    order_type_weighting: str
+    order_type_weight_min: float
+    order_type_weight_max: float
     family_balanced_sampling: bool
     batch_size: int
     num_workers: int
@@ -124,6 +127,14 @@ def parse_args() -> TrainConfigV2Debug:
     parser.add_argument("--action-family-weight-min", type=float, default=0.25)
     parser.add_argument("--action-family-weight-max", type=float, default=4.0)
     parser.add_argument("--place-building-weight-multiplier", type=float, default=1.75)
+    parser.add_argument(
+        "--order-type-weighting",
+        type=str,
+        choices=("none", "sqrt_inverse_frequency", "inverse_frequency"),
+        default="sqrt_inverse_frequency",
+    )
+    parser.add_argument("--order-type-weight-min", type=float, default=0.25)
+    parser.add_argument("--order-type-weight-max", type=float, default=4.0)
     parser.add_argument("--family-balanced-sampling", action="store_true")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -188,6 +199,9 @@ def parse_args() -> TrainConfigV2Debug:
         action_family_weight_min=args.action_family_weight_min,
         action_family_weight_max=args.action_family_weight_max,
         place_building_weight_multiplier=args.place_building_weight_multiplier,
+        order_type_weighting=args.order_type_weighting,
+        order_type_weight_min=args.order_type_weight_min,
+        order_type_weight_max=args.order_type_weight_max,
         family_balanced_sampling=bool(args.family_balanced_sampling),
         batch_size=args.batch_size,
         num_workers=args.num_workers,
@@ -402,12 +416,103 @@ def build_action_family_weighting(
     return weights, payload
 
 
+def build_order_type_weighting(
+    dataset: Dataset[Any],
+    config: TrainConfigV2Debug,
+    order_type_count: int,
+) -> tuple[torch.Tensor | None, dict[str, Any] | None]:
+    """Build class weights for the order-type head (within Order family).
+
+    Analogous to build_action_family_weighting but scoped to order-type classes.
+    Only counts samples where the action family is Order (ID 0) and the order-type
+    mask is active.
+    """
+    action_family_class_count = len(LABEL_LAYOUT_V2_ACTION_FAMILIES)
+    if config.order_type_weighting == "none":
+        return None, {
+            "mode": "none",
+            "weightMin": config.order_type_weight_min,
+            "weightMax": config.order_type_weight_max,
+            "classCount": order_type_count,
+        }
+
+    counts = torch.zeros(order_type_count, dtype=torch.float64)
+    for sample_index in range(len(dataset)):
+        sample = dataset[sample_index]
+        order_type_mask = sample["training_masks"]["orderTypeLossMask"].reshape(-1) > 0
+        if not bool(order_type_mask.any()):
+            continue
+        order_type_ids = torch.argmax(
+            sample["training_targets"]["orderTypeOneHot"].reshape(-1, order_type_count),
+            dim=-1,
+        )
+        valid_order_type_ids = order_type_ids[order_type_mask]
+        if valid_order_type_ids.numel() == 0:
+            continue
+        counts += torch.bincount(valid_order_type_ids, minlength=order_type_count).to(torch.float64)
+
+    seen_mask = counts > 0
+    weights = torch.ones(order_type_count, dtype=torch.float32)
+    if not bool(seen_mask.any()):
+        return weights, {
+            "mode": config.order_type_weighting,
+            "weightMin": config.order_type_weight_min,
+            "weightMax": config.order_type_weight_max,
+            "classCount": order_type_count,
+            "seenClassCount": 0,
+            "sampleCount": 0,
+            "classCounts": [],
+        }
+
+    seen_counts = counts[seen_mask]
+    mean_count = float(seen_counts.mean().item())
+    if config.order_type_weighting == "inverse_frequency":
+        raw_seen_weights = mean_count / seen_counts
+    elif config.order_type_weighting == "sqrt_inverse_frequency":
+        raw_seen_weights = torch.sqrt(torch.tensor(mean_count, dtype=torch.float64) / seen_counts)
+    else:
+        raise ValueError(f"Unsupported order-type weighting mode: {config.order_type_weighting}")
+
+    clamped_seen_weights = raw_seen_weights.clamp(
+        min=config.order_type_weight_min,
+        max=config.order_type_weight_max,
+    )
+    normalized_seen_weights = clamped_seen_weights / clamped_seen_weights.mean().clamp(min=1e-9)
+    weights[seen_mask] = normalized_seen_weights.to(torch.float32)
+
+    seen_indices = torch.nonzero(seen_mask, as_tuple=False).reshape(-1)
+    class_counts = [
+        {
+            "orderTypeId": int(index.item()),
+            "count": int(counts[int(index.item())].item()),
+            "weight": float(weights[int(index.item())].item()),
+        }
+        for index in seen_indices
+    ]
+    class_counts.sort(key=lambda item: item["count"], reverse=True)
+
+    payload = {
+        "mode": config.order_type_weighting,
+        "weightMin": config.order_type_weight_min,
+        "weightMax": config.order_type_weight_max,
+        "classCount": order_type_count,
+        "seenClassCount": int(seen_mask.sum().item()),
+        "sampleCount": int(counts.sum().item()),
+        "classCounts": class_counts,
+    }
+    return weights, payload
+
+
 def build_action_family_sampling_weights(
     dataset: Dataset[Any],
     class_weights: torch.Tensor | None,
+    order_type_class_weights: torch.Tensor | None = None,
 ) -> torch.Tensor | None:
     if class_weights is None:
         return None
+
+    # Order family ID in V2 is 0.
+    order_family_id = LABEL_LAYOUT_V2_ACTION_FAMILIES.index("Order")
 
     sample_weights = torch.ones(len(dataset), dtype=torch.double)
     for sample_index in range(len(dataset)):
@@ -422,7 +527,30 @@ def build_action_family_sampling_weights(
         valid_action_family_ids = action_family_ids[action_family_mask]
         if valid_action_family_ids.numel() == 0:
             continue
-        sample_weights[sample_index] = float(class_weights[valid_action_family_ids].mean().item())
+        family_weight = float(class_weights[valid_action_family_ids].mean().item())
+
+        # If this sample contains Order-family actions and order-type weights
+        # are provided, multiply by the order-type weight for sub-family
+        # balanced sampling (up-weights Attack/AttackMove, down-weights Move).
+        order_type_boost = 1.0
+        if order_type_class_weights is not None:
+            order_mask = (valid_action_family_ids == order_family_id)
+            if bool(order_mask.any()):
+                order_type_mask = sample["training_masks"]["orderTypeLossMask"].reshape(-1) > 0
+                if bool(order_type_mask.any()):
+                    order_type_ids = torch.argmax(
+                        sample["training_targets"]["orderTypeOneHot"].reshape(
+                            -1, order_type_class_weights.shape[0],
+                        ),
+                        dim=-1,
+                    )
+                    valid_ot_ids = order_type_ids[order_type_mask]
+                    if valid_ot_ids.numel() > 0:
+                        order_type_boost = float(
+                            order_type_class_weights[valid_ot_ids].mean().item()
+                        )
+
+        sample_weights[sample_index] = family_weight * order_type_boost
     return sample_weights
 
 
@@ -430,10 +558,13 @@ def build_v2_train_loader(
     dataset: Dataset[Any],
     config: TrainConfigV2Debug,
     action_family_class_weights: torch.Tensor | None,
+    order_type_class_weights: torch.Tensor | None = None,
 ) -> DataLoader:
     batch_size = min(config.batch_size, len(dataset))
     if config.family_balanced_sampling:
-        sampling_weights = build_action_family_sampling_weights(dataset, action_family_class_weights)
+        sampling_weights = build_action_family_sampling_weights(
+            dataset, action_family_class_weights, order_type_class_weights,
+        )
         if sampling_weights is None:
             raise ValueError("Family-balanced sampling requires non-null action-family class weights.")
         sampler = WeightedRandomSampler(
@@ -484,6 +615,7 @@ def run_epoch_v2(
     grad_clip_norm: float,
     teacher_forcing_mode: str,
     action_family_class_weights: torch.Tensor | None,
+    order_type_class_weights: torch.Tensor | None = None,
 ) -> dict[str, float]:
     training = optimizer is not None
     if training:
@@ -510,6 +642,7 @@ def run_epoch_v2(
                 outputs,
                 batch,
                 action_family_class_weights=action_family_class_weights,
+                order_type_class_weights=order_type_class_weights,
             )
             if training:
                 loss_output.total_loss.backward()
@@ -631,17 +764,27 @@ def main() -> None:
         config,
     )
 
+    model_config = infer_v2_model_config(records, config)
+    order_type_class_weights, order_type_weight_payload = build_order_type_weighting(
+        train_dataset,
+        config,
+        order_type_count=model_config.order_type_count,
+    )
+
     train_loader = build_v2_train_loader(
         train_dataset,
         config,
         action_family_class_weights,
+        order_type_class_weights=order_type_class_weights,
     )
     val_loader = build_loader(val_dataset, config, shuffle=False) if val_dataset is not None else None
 
-    model = RA2SLV2DebugModel(infer_v2_model_config(records, config))
+    model = RA2SLV2DebugModel(model_config)
     device = resolve_device(config)
     if action_family_class_weights is not None:
         action_family_class_weights = action_family_class_weights.to(device)
+    if order_type_class_weights is not None:
+        order_type_class_weights = order_type_class_weights.to(device)
     model = model.to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
@@ -663,10 +806,13 @@ def main() -> None:
         "trainShards": [record.stem for record in train_records],
         "valShards": [record.stem for record in val_records],
         "actionFamilyWeighting": action_family_weight_payload,
+        "orderTypeWeighting": order_type_weight_payload,
     }
     save_json(config.output_dir / "data_split.json", split_payload)
     if action_family_weight_payload is not None:
         save_json(config.output_dir / "action_family_weighting.json", action_family_weight_payload)
+    if order_type_weight_payload is not None:
+        save_json(config.output_dir / "order_type_weighting.json", order_type_weight_payload)
 
     history_path = config.output_dir / "history.jsonl"
     if history_path.exists():
@@ -686,6 +832,7 @@ def main() -> None:
             grad_clip_norm=config.grad_clip_norm,
             teacher_forcing_mode=config.teacher_forcing_mode,
             action_family_class_weights=action_family_class_weights,
+            order_type_class_weights=order_type_class_weights,
         )
         val_metrics = None
         val_free_metrics = None
@@ -698,6 +845,7 @@ def main() -> None:
                 grad_clip_norm=config.grad_clip_norm,
                 teacher_forcing_mode=config.teacher_forcing_mode,
                 action_family_class_weights=action_family_class_weights,
+                order_type_class_weights=order_type_class_weights,
             )
             val_free_metrics = run_free_running_eval_epoch_v2(
                 model=model,
@@ -780,6 +928,7 @@ def main() -> None:
         "checkpointDir": str(config.checkpoint_dir),
         "bestValLoss": best_val_loss,
         "actionFamilyWeighting": action_family_weight_payload,
+        "orderTypeWeighting": order_type_weight_payload,
         "finalTrainMetrics": last_train_metrics,
         "finalValMetrics": last_val_metrics,
         "finalValFreeMetrics": last_val_free_metrics,
