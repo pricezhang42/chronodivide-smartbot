@@ -36,6 +36,7 @@ from transform_lib.feature_layout import (  # noqa: E402
     augment_dataset_with_scalar_core_identity,
     augment_dataset_with_super_weapon_state,
     augment_dataset_with_tech_state,
+    augment_dataset_with_time_encoding,
 )
 from transform_lib.label_layout_v2 import (  # noqa: E402
     LABEL_LAYOUT_V2_ACTION_FAMILIES,
@@ -292,6 +293,7 @@ def build_runtime_feature_sections(payload: dict[str, Any]) -> dict[str, torch.T
     augment_dataset_with_available_action_mask(dataset)
     augment_dataset_with_owned_composition_bow(dataset)
     augment_dataset_with_scalar_core_identity(dataset)
+    augment_dataset_with_time_encoding(dataset)
     augment_dataset_with_tech_state(dataset)
     augment_dataset_with_production_state(dataset)
     augment_dataset_with_super_weapon_state(dataset)

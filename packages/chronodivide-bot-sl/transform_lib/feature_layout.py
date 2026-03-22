@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -249,6 +250,8 @@ ENTITY_INTENT_SUMMARY_FEATURE_NAMES = [
     "intent_rally_distance_norm",
 ]
 ENTITY_INTENT_WEAPON_COOLDOWN_CLAMP_TICKS = 90.0
+TIME_ENCODING_DIM = 32
+TIME_ENCODING_MAX_TICKS = 54000  # ~30 minutes at 30 tps
 CURRENT_SELECTION_SUMMARY_FEATURE_NAMES = [
     "selected_infantry_count",
     "selected_vehicle_count",
@@ -1352,6 +1355,39 @@ def augment_dataset_with_scalar_core_identity(dataset: dict[str, Any]) -> None:
             *sample["featureTensors"]["scalar"],
             *build_scalar_core_identity(sample, dataset),
         ]
+
+
+def build_time_encoding(tick: float) -> list[float]:
+    """Sinusoidal positional encoding of game tick, like transformer position encoding.
+
+    Returns TIME_ENCODING_DIM floats: pairs of (sin, cos) at exponentially spaced frequencies.
+    This lets the model distinguish early/mid/late game without learning nonlinear boundaries.
+    """
+    encoding = []
+    half = TIME_ENCODING_DIM // 2
+    for i in range(half):
+        frequency = 1.0 / (TIME_ENCODING_MAX_TICKS ** (i / max(half - 1, 1)))
+        angle = tick * frequency
+        encoding.append(math.sin(angle))
+        encoding.append(math.cos(angle))
+    return encoding
+
+
+def augment_dataset_with_time_encoding(dataset: dict[str, Any]) -> None:
+    samples = dataset.get("samples", [])
+    schema = dataset["schema"]
+    append_schema_section(
+        schema["featureSections"],
+        name="timeEncoding",
+        shape=[TIME_ENCODING_DIM],
+        dtype="float32",
+    )
+    schema["flatFeatureLength"] = compute_flat_length(schema["featureSections"])
+
+    tick_index = _scalar_name_index(schema, "tick")
+    for sample in samples:
+        tick = float(sample["featureTensors"]["scalar"][tick_index])
+        sample["featureTensors"]["timeEncoding"] = build_time_encoding(tick)
 
 
 def augment_dataset_with_build_order_trace(dataset: dict[str, Any]) -> None:

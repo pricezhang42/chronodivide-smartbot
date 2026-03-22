@@ -43,6 +43,7 @@ class RA2SLCoreModel(nn.Module):
         self.scalar_encoder = ScalarEncoder(
             ScalarEncoderConfig(
                 build_order_vocab_size=config.build_order_vocab_size,
+                action_context_vocab_size=config.build_order_vocab_size,
                 hidden_dim=config.scalar_hidden_dim,
                 output_dim=config.scalar_output_dim,
                 dropout=config.dropout,

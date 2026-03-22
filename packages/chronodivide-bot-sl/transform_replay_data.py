@@ -83,6 +83,7 @@ from transform_lib.feature_layout import (
     augment_dataset_with_scalar_core_identity,
     augment_dataset_with_super_weapon_state,
     augment_dataset_with_tech_state,
+    augment_dataset_with_time_encoding,
 )
 from transform_lib.schema_utils import (
     build_sample_context_tensors,
@@ -486,6 +487,7 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
     augment_dataset_with_feature_context_v1(dataset)
     augment_dataset_with_current_selection_summary(dataset)
     augment_dataset_with_scalar_core_identity(dataset)
+    augment_dataset_with_time_encoding(dataset)
     augment_dataset_with_available_action_mask(dataset)
     augment_dataset_with_owned_composition_bow(dataset)
     augment_dataset_with_build_order_trace(dataset)
