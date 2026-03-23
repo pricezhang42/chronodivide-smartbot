@@ -252,6 +252,24 @@ ENTITY_INTENT_SUMMARY_FEATURE_NAMES = [
 ENTITY_INTENT_WEAPON_COOLDOWN_CLAMP_TICKS = 90.0
 TIME_ENCODING_DIM = 32
 TIME_ENCODING_MAX_TICKS = 54000  # ~30 minutes at 30 tps
+GAME_STATS_FEATURE_NAMES = [
+    "stats_score",
+    "stats_credits_gained",
+    "stats_buildings_captured",
+    "stats_units_built_aircraft",
+    "stats_units_built_building",
+    "stats_units_built_infantry",
+    "stats_units_built_vehicle",
+    "stats_units_killed_aircraft",
+    "stats_units_killed_building",
+    "stats_units_killed_infantry",
+    "stats_units_killed_vehicle",
+    "stats_units_lost_aircraft",
+    "stats_units_lost_building",
+    "stats_units_lost_infantry",
+    "stats_units_lost_vehicle",
+]
+GAME_STATS_DIM = len(GAME_STATS_FEATURE_NAMES)
 CURRENT_SELECTION_SUMMARY_FEATURE_NAMES = [
     "selected_infantry_count",
     "selected_vehicle_count",
@@ -1388,6 +1406,33 @@ def augment_dataset_with_time_encoding(dataset: dict[str, Any]) -> None:
     for sample in samples:
         tick = float(sample["featureTensors"]["scalar"][tick_index])
         sample["featureTensors"]["timeEncoding"] = build_time_encoding(tick)
+
+
+def augment_dataset_with_game_stats(dataset: dict[str, Any]) -> None:
+    """Promotes gameStats from featureTensors into a separate schema section.
+
+    gameStats is only present when replays are extracted with internalGame access.
+    At live inference, this section will be absent and the model will skip it.
+    """
+    samples = dataset.get("samples", [])
+    has_any = any("gameStats" in sample.get("featureTensors", {}) for sample in samples)
+    if not has_any:
+        return
+
+    schema = dataset["schema"]
+    append_schema_section(
+        schema["featureSections"],
+        name="gameStats",
+        shape=[GAME_STATS_DIM],
+        dtype="float32",
+    )
+    schema["flatFeatureLength"] = compute_flat_length(schema["featureSections"])
+
+    # Samples without gameStats get zeros (shouldn't happen within a single replay,
+    # but defensive in case of mixed data).
+    for sample in samples:
+        if "gameStats" not in sample["featureTensors"]:
+            sample["featureTensors"]["gameStats"] = [0.0] * GAME_STATS_DIM
 
 
 def augment_dataset_with_build_order_trace(dataset: dict[str, Any]) -> None:

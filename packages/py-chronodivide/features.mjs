@@ -51,6 +51,26 @@ const SCALAR_FEATURE_NAMES = [
   "enemy_visible_hit_points_sum",
 ];
 
+// Cumulative game statistics — only available during replay extraction (not at live inference).
+// These are extracted as a separate feature group so the model can handle their absence.
+const GAME_STATS_FEATURE_NAMES = [
+  "stats_score",
+  "stats_credits_gained",
+  "stats_buildings_captured",
+  "stats_units_built_aircraft",
+  "stats_units_built_building",
+  "stats_units_built_infantry",
+  "stats_units_built_vehicle",
+  "stats_units_killed_aircraft",
+  "stats_units_killed_building",
+  "stats_units_killed_infantry",
+  "stats_units_killed_vehicle",
+  "stats_units_lost_aircraft",
+  "stats_units_lost_building",
+  "stats_units_lost_infantry",
+  "stats_units_lost_vehicle",
+];
+
 const ENTITY_FEATURE_NAMES_BASE = [
   "relation_self",
   "relation_allied",
@@ -398,6 +418,12 @@ function sortedCountMap(countsByName) {
   );
 }
 
+function counterByTypeCount(counterArray, objectType) {
+  if (!Array.isArray(counterArray)) return 0;
+  const entry = counterArray.find((entry) => entry.objectType === objectType);
+  return safeNumber(entry?.count, 0);
+}
+
 function buildScalarFeatures(snapshot, aggregates) {
   const { map, player, observation } = snapshot;
   const visibleTileFraction = ratio(observation.visibleTileCount, map.width * map.height);
@@ -439,6 +465,30 @@ function buildScalarFeatures(snapshot, aggregates) {
     aggregates.enemy.purchaseValueSum,
     aggregates.self.hitPointsSum,
     aggregates.enemy.hitPointsSum,
+  ];
+}
+
+function buildGameStatsFeatures(snapshot) {
+  const stats = snapshot.player?.stats;
+  if (!stats) {
+    return null;
+  }
+  return [
+    safeNumber(snapshot.player.score, 0),
+    safeNumber(stats.creditsGained, 0),
+    safeNumber(stats.buildingsCaptured, 0),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Aircraft),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Building),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Infantry),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Vehicle),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Aircraft),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Building),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Infantry),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Vehicle),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Aircraft),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Building),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Infantry),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Vehicle),
   ];
 }
 
@@ -692,15 +742,18 @@ export function getObservationFeatureSchema({ maxEntities = 128, spatialSize = 3
 
 export function extractObservationFeatureSample(
   gameApi,
-  { playerName, maxEntities = 128, spatialSize = 32, minimapSize = 64 } = {},
+  { playerName, maxEntities = 128, spatialSize = 32, minimapSize = 64, internalGame = null } = {},
 ) {
   const snapshot = collectPlayerObservationSnapshot(gameApi, {
     playerName,
     unitLimit: null,
+    internalGame,
+    includePlayerStats: internalGame != null,
   });
   const aggregates = aggregateSnapshot(snapshot);
   const entities = encodeEntities(snapshot, maxEntities);
 
+  const gameStats = buildGameStatsFeatures(snapshot);
   return {
     tick: snapshot.tick,
     gameTime: snapshot.gameTime,
@@ -708,6 +761,8 @@ export function extractObservationFeatureSample(
     observation: snapshot.observation,
     scalarFeatureNames: SCALAR_FEATURE_NAMES.slice(),
     scalarFeatures: buildScalarFeatures(snapshot, aggregates),
+    gameStatsFeatureNames: gameStats != null ? GAME_STATS_FEATURE_NAMES.slice() : undefined,
+    gameStatsFeatures: gameStats ?? undefined,
     entityFeatureNames: ENTITY_FEATURE_NAMES_BASE.slice(),
     entityCount: entities.entityCount,
     entityMask: entities.entityMask,

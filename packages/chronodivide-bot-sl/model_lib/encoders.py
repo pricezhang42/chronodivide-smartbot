@@ -222,6 +222,7 @@ class ScalarEncoderConfig:
     section_order: tuple[str, ...] = (
         "scalar",
         "timeEncoding",
+        "gameStats",
         "lastActionContext",
         "currentSelectionCount",
         "currentSelectionResolvedCount",
@@ -372,13 +373,72 @@ class EntityEncoder(nn.Module):
 
 
 # ---------------------------------------------------------------------------
+# Entity scatter — project entity embeddings onto a spatial grid
+# ---------------------------------------------------------------------------
+
+# Entity feature indices for normalized tile position (0-1 range).
+_ENTITY_TILE_X_NORM_IDX = 12
+_ENTITY_TILE_Y_NORM_IDX = 13
+
+
+def scatter_entity_embeddings(
+    entity_embeddings: torch.Tensor,
+    entity_features: torch.Tensor,
+    entity_mask: torch.Tensor,
+    grid_h: int,
+    grid_w: int,
+) -> torch.Tensor:
+    """Scatter entity embeddings onto a spatial grid by tile position.
+
+    Args:
+        entity_embeddings: [batch, max_entities, embed_dim]
+        entity_features: [batch, max_entities, feature_dim] (raw, pre-preprocessor)
+        entity_mask: [batch, max_entities] boolean
+        grid_h, grid_w: spatial grid resolution
+
+    Returns:
+        [batch, embed_dim, grid_h, grid_w] — summed entity embeddings per cell.
+    """
+    batch_size, max_entities, embed_dim = entity_embeddings.shape
+    device = entity_embeddings.device
+    dtype = entity_embeddings.dtype
+
+    # Extract normalized positions from raw entity features.
+    x_norm = entity_features[..., _ENTITY_TILE_X_NORM_IDX].to(dtype)
+    y_norm = entity_features[..., _ENTITY_TILE_Y_NORM_IDX].to(dtype)
+
+    # Map to grid indices.
+    gx = torch.clamp((x_norm * grid_w).to(torch.int64), min=0, max=grid_w - 1)
+    gy = torch.clamp((y_norm * grid_h).to(torch.int64), min=0, max=grid_h - 1)
+
+    # Flatten grid index: gy * grid_w + gx.
+    flat_idx = gy * grid_w + gx  # [batch, max_entities]
+
+    # Mask out invalid entities.
+    valid = entity_mask > 0
+    masked_embeddings = entity_embeddings * valid.unsqueeze(-1).to(dtype)
+
+    # Scatter add into grid. Use batch offset for flat scatter.
+    grid = torch.zeros(batch_size, grid_h * grid_w, embed_dim, device=device, dtype=dtype)
+    flat_idx_expanded = flat_idx.unsqueeze(-1).expand_as(masked_embeddings)
+    grid.scatter_add_(1, flat_idx_expanded, masked_embeddings)
+
+    # Reshape to [batch, embed_dim, grid_h, grid_w].
+    return grid.reshape(batch_size, grid_h, grid_w, embed_dim).permute(0, 3, 1, 2)
+
+
+# ---------------------------------------------------------------------------
 # SpatialEncoder
 # ---------------------------------------------------------------------------
+
+_SCATTER_CHANNELS = 8  # Number of channels projected from entity embeddings.
+
 
 @dataclass
 class SpatialEncoderConfig:
     hidden_dim: int = 64
     output_dim: int = 64
+    entity_scatter_dim: int = 0  # Entity model_dim; 0 disables scatter.
     dropout: float = 0.1
 
 
@@ -386,6 +446,12 @@ class SpatialEncoder(nn.Module):
     def __init__(self, config: SpatialEncoderConfig) -> None:
         super().__init__()
         self.config = config
+        self.scatter_proj: nn.Module | None = None
+        if config.entity_scatter_dim > 0:
+            self.scatter_proj = nn.Sequential(
+                nn.Linear(config.entity_scatter_dim, _SCATTER_CHANNELS),
+                nn.GELU(),
+            )
         self.trunk = nn.Sequential(
             nn.LazyConv2d(config.hidden_dim // 2, kernel_size=3, padding=1),
             nn.GELU(),
@@ -408,6 +474,7 @@ class SpatialEncoder(nn.Module):
         spatial: torch.Tensor,
         minimap: torch.Tensor,
         map_static: torch.Tensor,
+        entity_scatter_map: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         target_size = minimap.shape[-2:]
         resized_spatial = F.interpolate(
@@ -421,14 +488,23 @@ class SpatialEncoder(nn.Module):
             size=target_size,
             mode="nearest",
         )
-        stacked = torch.cat(
-            [
-                resized_spatial,
-                minimap.to(torch.float32),
-                resized_map_static,
-            ],
-            dim=1,
-        )
+        planes = [
+            resized_spatial,
+            minimap.to(torch.float32),
+            resized_map_static,
+        ]
+        if entity_scatter_map is not None and self.scatter_proj is not None:
+            # entity_scatter_map: [batch, entity_dim, H, W]
+            # Project per-cell embeddings to fewer channels.
+            scatter_hwc = entity_scatter_map.permute(0, 2, 3, 1)  # [B, H, W, entity_dim]
+            projected = self.scatter_proj(scatter_hwc)  # [B, H, W, scatter_channels]
+            scatter_planes = projected.permute(0, 3, 1, 2)  # [B, scatter_channels, H, W]
+            # Resize to target if needed.
+            if scatter_planes.shape[-2:] != target_size:
+                scatter_planes = F.interpolate(scatter_planes, size=target_size, mode="bilinear", align_corners=False)
+            planes.append(scatter_planes)
+
+        stacked = torch.cat(planes, dim=1)
         feature_map = self.trunk(stacked)
         pooled = torch.mean(feature_map, dim=(2, 3))
         output = self.output_proj(pooled)
