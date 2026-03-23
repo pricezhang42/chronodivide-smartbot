@@ -22,6 +22,18 @@ packages/chronodivide-bot-sl/generated_tensors/*
 *.tsbuildinfo
 *.pt
 
+# ML training artifacts
+*.pt
+*.db
+packages/chronodivide-bot-sl/model_runs/
+packages/chronodivide-bot-sl/output_shards*/
+packages/chronodivide-bot-sl/model_lib/__pycache__
+packages/chronodivide-bot-sl/selected_*.txt
+packages/chronodivide-bot-sl/training_player_map.json
+packages/chronodivide-bot-sl/winner_results*.jsonl
+packages/chronodivide-bot-driver/bot-replays/
+packages/chronodivide-bot-driver/dummy-replays/
+
 # extracted game files
 *.ini
 *.mix

@@ -259,9 +259,11 @@ function buildFeatureTensors(rawSample, nameVocabulary, options) {
     spatial: rawSample.feature.spatial.data.map((plane) => plane.map((row) => row.slice())),
     minimap: rawSample.feature.minimap.data.map((plane) => plane.map((row) => row.slice())),
   };
+
   if (Array.isArray(rawSample.feature.gameStatsFeatures)) {
     featureTensors.gameStats = rawSample.feature.gameStatsFeatures.slice();
   }
+
   return featureTensors;
 }
 

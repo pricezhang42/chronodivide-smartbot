@@ -23,6 +23,8 @@ SCALAR_FEATURE_SECTION_NAMES = (
     "techState",
     "productionState",
     "superWeaponState",
+    "timeEncoding",
+    "gameStats",
 )
 
 ENTITY_FEATURE_SECTION_NAMES = (

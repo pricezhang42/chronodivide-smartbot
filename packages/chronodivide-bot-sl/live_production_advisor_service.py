@@ -31,6 +31,7 @@ from transform_lib.feature_layout import (  # noqa: E402
     augment_dataset_with_current_selection_summary,
     augment_dataset_with_enemy_memory_bow,
     augment_dataset_with_entity_intent_summary,
+    augment_dataset_with_entity_threat,
     augment_dataset_with_owned_composition_bow,
     augment_dataset_with_production_state,
     augment_dataset_with_scalar_core_identity,
@@ -83,18 +84,67 @@ def _get_required_shape(model_state: dict[str, torch.Tensor], key: str) -> tuple
     return tuple(int(size) for size in tensor.shape)
 
 
+def _detect_action_context_vocab_size(model_state: dict[str, torch.Tensor]) -> int:
+    """Detect whether the checkpoint has an ActionContextEncoder, and return its vocab size (or 0)."""
+    key = "core.scalar_encoder.action_context_encoder.action_embedding.weight"
+    if key in model_state:
+        return int(model_state[key].shape[0]) - 2  # vocab_size + 2 (padding)
+    return 0
+
+
+def _detect_build_order_vocab_size(model_state: dict[str, torch.Tensor]) -> int:
+    """Detect build order vocab size from checkpoint, handling both old and new key names."""
+    # New key: token_embedding.weight (from BuildOrderTraceEncoder)
+    new_key = "core.scalar_encoder.build_order_encoder.token_embedding.weight"
+    if new_key in model_state:
+        return int(model_state[new_key].shape[0]) - 1
+    # Old key: embedding.weight
+    old_key = "core.scalar_encoder.build_order_encoder.embedding.weight"
+    if old_key in model_state:
+        return int(model_state[old_key].shape[0]) - 1
+    raise KeyError("Cannot find build order embedding in checkpoint (tried token_embedding.weight and embedding.weight)")
+
+
+def _detect_build_order_config(model_state: dict[str, torch.Tensor]) -> dict[str, int]:
+    """Detect build order transformer config from checkpoint weights."""
+    new_key = "core.scalar_encoder.build_order_encoder.token_embedding.weight"
+    if new_key in model_state:
+        build_order_dim = int(model_state[new_key].shape[1])
+        # Count transformer layers
+        num_layers = 0
+        while f"core.scalar_encoder.build_order_encoder.transformer.layers.{num_layers}.self_attn.in_proj_weight" in model_state:
+            num_layers += 1
+        # Detect num_heads from in_proj_weight shape: (3 * dim, dim) → heads = first_dim / (3 * head_dim)
+        # With standard MHA: in_proj is (3*embed_dim, embed_dim), num_heads inferred from layer
+        attn_key = "core.scalar_encoder.build_order_encoder.transformer.layers.0.self_attn.in_proj_weight"
+        # Default to 4 heads; exact value doesn't matter for loading since it's encoded in weights
+        num_heads = 4
+        if attn_key in model_state:
+            in_proj_rows = int(model_state[attn_key].shape[0])
+            # in_proj_weight is (3*embed_dim, embed_dim), try common head counts
+            for candidate_heads in [8, 4, 2, 1]:
+                if build_order_dim % candidate_heads == 0:
+                    num_heads = candidate_heads
+                    break
+        return {"build_order_dim": build_order_dim, "build_order_num_layers": num_layers, "build_order_num_heads": num_heads}
+    # Old-style: uses hidden_dim defaults
+    return {}
+
+
 def _load_v1_model(
     model_state: dict[str, torch.Tensor],
     checkpoint_config: dict[str, Any],
     device: torch.device,
 ) -> RA2SLBaselineModel:
     entity_name_vocab_size = _get_required_shape(model_state, "core.entity_encoder.name_embedding.weight")[0] - 1
-    build_order_vocab_size = _get_required_shape(model_state, "core.scalar_encoder.build_order_encoder.embedding.weight")[0] - 1
+    build_order_vocab_size = _detect_build_order_vocab_size(model_state)
+    build_order_config = _detect_build_order_config(model_state)
     action_vocab_size = _get_required_shape(model_state, "heads.action_type_head.head.net.3.weight")[0]
     delay_bins = _get_required_shape(model_state, "heads.delay_head.head.net.3.weight")[0]
     max_selected_units = _get_required_shape(model_state, "heads.units_head.step_embeddings.weight")[0] - 1
     spatial_size = int(checkpoint_config.get("spatial_size", checkpoint_config.get("spatialSize", 64)))
     max_entities = int(checkpoint_config.get("max_entities", checkpoint_config.get("maxEntities", 128)))
+    action_context_vocab_size = _detect_action_context_vocab_size(model_state)
     model = RA2SLBaselineModel(
         RA2SLBaselineConfig(
             entity_name_vocab_size=entity_name_vocab_size,
@@ -104,8 +154,10 @@ def _load_v1_model(
             max_entities=max_entities,
             spatial_size=spatial_size,
             build_order_vocab_size=build_order_vocab_size,
+            action_context_vocab_size=action_context_vocab_size,
             use_lstm_core=bool(checkpoint_config.get("use_lstm_core", False)),
             lstm_num_layers=int(checkpoint_config.get("lstm_num_layers", 1)),
+            **build_order_config,
         )
     )
     model.load_state_dict(model_state)
@@ -120,7 +172,8 @@ def _load_v2_model(
     device: torch.device,
 ) -> RA2SLV2DebugModel:
     entity_name_vocab_size = _get_required_shape(model_state, "core.entity_encoder.name_embedding.weight")[0] - 1
-    build_order_vocab_size = _get_required_shape(model_state, "core.scalar_encoder.build_order_encoder.embedding.weight")[0] - 1
+    build_order_vocab_size = _detect_build_order_vocab_size(model_state)
+    build_order_config = _detect_build_order_config(model_state)
     action_family_count = _get_required_shape(model_state, "action_family_head.net.3.weight")[0]
     order_type_count = _get_required_shape(model_state, "order_type_head.net.3.weight")[0]
     target_mode_count = _get_required_shape(model_state, "target_mode_head.net.3.weight")[0]
@@ -131,6 +184,7 @@ def _load_v2_model(
     max_commanded_units = _get_required_shape(model_state, "commanded_units_head.step_embeddings.weight")[0] - 1
     spatial_size = int(checkpoint_config.get("spatial_size", checkpoint_config.get("spatialSize", 64)))
     max_entities = int(checkpoint_config.get("max_entities", checkpoint_config.get("maxEntities", 128)))
+    action_context_vocab_size = _detect_action_context_vocab_size(model_state)
     model = RA2SLV2DebugModel(
         RA2SLV2DebugConfig(
             entity_name_vocab_size=entity_name_vocab_size,
@@ -145,8 +199,10 @@ def _load_v2_model(
             max_entities=max_entities,
             spatial_size=spatial_size,
             build_order_vocab_size=build_order_vocab_size,
+            action_context_vocab_size=action_context_vocab_size,
             use_lstm_core=bool(checkpoint_config.get("use_lstm_core", False)),
             lstm_num_layers=int(checkpoint_config.get("lstm_num_layers", 1)),
+            **build_order_config,
         )
     )
     model.load_state_dict(model_state)
@@ -299,6 +355,7 @@ def build_runtime_feature_sections(payload: dict[str, Any]) -> dict[str, torch.T
     augment_dataset_with_super_weapon_state(dataset)
     augment_dataset_with_enemy_memory_bow(dataset)
     augment_dataset_with_entity_intent_summary(dataset)
+    augment_dataset_with_entity_threat(dataset)
 
     return build_structured_section_tensors(
         dataset["samples"],

@@ -29,26 +29,6 @@ FEATURE_LAYOUT_V1_TOP_LEVEL_SECTIONS = [
     "mapStatic",
 ]
 
-FEATURE_LAYOUT_V1_PRIORITY_ZERO = [
-    "availableActionMask",
-    "ownedCompositionBow",
-    "scalarCore.factionIdentity",
-]
-
-FEATURE_LAYOUT_V1_PRIORITY_ONE = [
-    "buildOrderTrace",
-    "techState",
-    "productionState",
-    "mapStatic.core",
-]
-
-FEATURE_LAYOUT_V1_PRIORITY_TWO = [
-    "enemyMemoryBow",
-    "superWeaponState",
-    "mapStatic.extended",
-    "entity.intentSummary",
-]
-
 HARVESTER_NAMES = {"HARV", "CMIN"}
 DEPLOYABLE_NAMES = {"AMCV", "SMCV"}
 CONSTRUCTION_YARD_NAMES = {"NACNST", "GACNST", "CACNST", "YACNST"}
@@ -288,13 +268,6 @@ def build_feature_layout_v1_contract() -> dict[str, object]:
     return {
         "version": FEATURE_LAYOUT_V1_VERSION,
         "topLevelSections": list(FEATURE_LAYOUT_V1_TOP_LEVEL_SECTIONS),
-        "priority0": list(FEATURE_LAYOUT_V1_PRIORITY_ZERO),
-        "priority1": list(FEATURE_LAYOUT_V1_PRIORITY_ONE),
-        "priority2": list(FEATURE_LAYOUT_V1_PRIORITY_TWO),
-        "notes": [
-            "This module freezes the feature-layout V1 section names before they are fully implemented.",
-            "The current transformer does not yet emit all of these sections.",
-        ],
     }
 
 
@@ -1802,3 +1775,230 @@ def augment_dataset_with_map_static(dataset: dict[str, Any]) -> None:
         if static_map is None:
             raise KeyError(f"Static map features missing for player: {player_name}")
         sample["featureTensors"]["mapStatic"] = static_map["data"]
+
+
+# ---------------------------------------------------------------------------
+# Time Encoding (sinusoidal positional encoding over game tick)
+# ---------------------------------------------------------------------------
+
+TIME_ENCODING_DIM = 32
+TIME_ENCODING_MAX_TICKS = 54000  # ~30 minutes at 30 tps
+
+
+def build_time_encoding(tick: float) -> list[float]:
+    """32-dim sinusoidal encoding: 16 (sin, cos) pairs at exponentially spaced frequencies."""
+    encoding: list[float] = []
+    half = TIME_ENCODING_DIM // 2
+    for i in range(half):
+        frequency = 1.0 / (TIME_ENCODING_MAX_TICKS ** (i / max(half - 1, 1)))
+        angle = tick * frequency
+        encoding.append(math.sin(angle))
+        encoding.append(math.cos(angle))
+    return encoding
+
+
+def augment_dataset_with_time_encoding(dataset: dict[str, Any]) -> None:
+    """Add a 'timeEncoding' scalar section derived from the sample tick."""
+    samples = dataset.get("samples", [])
+    scalar_feature_names = dataset["schema"]["observation"]["scalarFeatureNames"]
+    tick_index = int(scalar_feature_names.index("tick"))
+
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="timeEncoding",
+        shape=[TIME_ENCODING_DIM],
+        dtype="float32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    for sample in samples:
+        tick = float(sample["featureTensors"]["scalar"][tick_index])
+        sample["featureTensors"]["timeEncoding"] = build_time_encoding(tick)
+
+
+# ---------------------------------------------------------------------------
+# Cumulative Game Statistics
+# ---------------------------------------------------------------------------
+
+GAME_STATS_FEATURE_NAMES = [
+    "stats_score",
+    "stats_credits_gained",
+    "stats_buildings_captured",
+    "stats_units_built_aircraft",
+    "stats_units_built_building",
+    "stats_units_built_infantry",
+    "stats_units_built_vehicle",
+    "stats_units_killed_aircraft",
+    "stats_units_killed_building",
+    "stats_units_killed_infantry",
+    "stats_units_killed_vehicle",
+    "stats_units_lost_aircraft",
+    "stats_units_lost_building",
+    "stats_units_lost_infantry",
+    "stats_units_lost_vehicle",
+]
+GAME_STATS_DIM = len(GAME_STATS_FEATURE_NAMES)
+
+
+def augment_dataset_with_game_stats(dataset: dict[str, Any]) -> None:
+    """Promote gameStats from featureTensors into a separate schema section.
+
+    Only applies if the JS extractor provided gameStats in the sample
+    featureTensors. At live inference time this section will be absent
+    (the ScalarEncoder gracefully skips missing sections).
+    """
+    samples = dataset.get("samples", [])
+    has_game_stats = any(
+        "gameStats" in sample.get("featureTensors", {})
+        for sample in samples
+    )
+    if not has_game_stats:
+        return
+
+    append_schema_section(
+        dataset["schema"]["featureSections"],
+        name="gameStats",
+        shape=[GAME_STATS_DIM],
+        dtype="float32",
+    )
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    for sample in samples:
+        game_stats = sample["featureTensors"].get("gameStats")
+        if game_stats is not None:
+            sample["featureTensors"]["gameStats"] = list(game_stats)[:GAME_STATS_DIM]
+        else:
+            sample["featureTensors"]["gameStats"] = [0.0] * GAME_STATS_DIM
+
+
+# ---------------------------------------------------------------------------
+# Entity Threat Features ("Was Targeted" proxy)
+# ---------------------------------------------------------------------------
+
+ENTITY_THREAT_FEATURE_NAMES = [
+    "threat_nearby_enemy_attacker_count",
+    "threat_nearest_enemy_attacker_dist_norm",
+    "threat_hp_ratio_below_half",
+]
+ENTITY_THREAT_DISTANCE_THRESHOLD = 0.15  # normalized map distance
+
+
+def _compute_entity_positions(entity_features: Any, entity_mask: Any, schema: dict[str, Any]) -> list[tuple[float, float] | None]:
+    """Extract (tile_x_norm, tile_y_norm) for each entity, or None if masked out."""
+    tile_x_norm_idx = _feature_name_index(schema, "tile_x_norm")
+    tile_y_norm_idx = _feature_name_index(schema, "tile_y_norm")
+    positions: list[tuple[float, float] | None] = []
+    for i, active in enumerate(entity_mask):
+        if int(active) == 0:
+            positions.append(None)
+        else:
+            x = float(entity_features[i][tile_x_norm_idx])
+            y = float(entity_features[i][tile_y_norm_idx])
+            positions.append((x, y))
+    return positions
+
+
+def _is_entity_attack_active(feature_row: Any, schema: dict[str, Any]) -> bool:
+    """Check if an entity is in an active attack state."""
+    for name in [
+        "attack_state_check_range",
+        "attack_state_prepare_to_fire",
+        "attack_state_fire_up",
+        "attack_state_firing",
+        "attack_state_just_fired",
+    ]:
+        idx = _feature_name_index(schema, name)
+        if float(feature_row[idx]) > 0.5:
+            return True
+    return False
+
+
+def build_entity_threat_features(sample: dict[str, Any], dataset: dict[str, Any]) -> list[list[float]]:
+    """Compute per-entity threat features based on nearby attacking enemies."""
+    schema = dataset["schema"]
+    entity_mask = sample["featureTensors"]["entityMask"]
+    entity_features = sample["featureTensors"]["entityFeatures"]
+    relation_self_idx = _feature_name_index(schema, "relation_self")
+    relation_allied_idx = _feature_name_index(schema, "relation_allied")
+    relation_enemy_idx = _feature_name_index(schema, "relation_enemy")
+    hit_points_ratio_idx = _feature_name_index(schema, "hit_points_ratio")
+
+    positions = _compute_entity_positions(entity_features, entity_mask, schema)
+
+    # Collect attacking enemy positions
+    attacking_enemy_positions: list[tuple[float, float]] = []
+    for i, active in enumerate(entity_mask):
+        if int(active) == 0:
+            continue
+        row = entity_features[i]
+        if float(row[relation_enemy_idx]) <= 0.5:
+            continue
+        if _is_entity_attack_active(row, schema):
+            pos = positions[i]
+            if pos is not None:
+                attacking_enemy_positions.append(pos)
+
+    threat_rows: list[list[float]] = []
+    threshold = ENTITY_THREAT_DISTANCE_THRESHOLD
+
+    for i, active in enumerate(entity_mask):
+        if int(active) == 0:
+            threat_rows.append([0.0] * len(ENTITY_THREAT_FEATURE_NAMES))
+            continue
+
+        row = entity_features[i]
+        is_friendly = float(row[relation_self_idx]) > 0.5 or float(row[relation_allied_idx]) > 0.5
+        pos = positions[i]
+
+        if not is_friendly or pos is None or not attacking_enemy_positions:
+            hp_ratio = float(row[hit_points_ratio_idx])
+            threat_rows.append([
+                0.0,
+                1.0,  # max distance = no threat
+                1.0 if hp_ratio < 0.5 else 0.0,
+            ])
+            continue
+
+        # Count nearby attacking enemies and find nearest
+        nearby_count = 0
+        min_dist = float("inf")
+        px, py = pos
+        for ex, ey in attacking_enemy_positions:
+            dist = ((px - ex) ** 2 + (py - ey) ** 2) ** 0.5
+            if dist < threshold:
+                nearby_count += 1
+            if dist < min_dist:
+                min_dist = dist
+
+        hp_ratio = float(row[hit_points_ratio_idx])
+        threat_rows.append([
+            min(float(nearby_count), 5.0) / 5.0,  # normalized 0..1
+            min(min_dist, 1.0),  # capped at 1.0
+            1.0 if hp_ratio < 0.5 else 0.0,
+        ])
+
+    return threat_rows
+
+
+def augment_dataset_with_entity_threat(dataset: dict[str, Any]) -> None:
+    """Add per-entity threat features (proxy for 'was targeted')."""
+    samples = dataset.get("samples", [])
+    entity_feature_names = dataset["schema"]["observation"]["entityFeatureNames"]
+    for feature_name in ENTITY_THREAT_FEATURE_NAMES:
+        if feature_name not in entity_feature_names:
+            entity_feature_names.append(feature_name)
+
+    _update_entity_feature_section_shape(dataset)
+    dataset["schema"]["flatFeatureLength"] = compute_flat_length(dataset["schema"]["featureSections"])
+
+    for sample in samples:
+        base_entity_rows = sample["featureTensors"]["entityFeatures"]
+        threat_rows = build_entity_threat_features(sample, dataset)
+        augmented_rows: list[list[float]] = []
+        for base_row, threat_row in zip(base_entity_rows, threat_rows):
+            if hasattr(base_row, "tolist"):
+                base_values = list(base_row.tolist())
+            else:
+                base_values = list(base_row)
+            augmented_rows.append([*base_values, *threat_row])
+        sample["featureTensors"]["entityFeatures"] = augmented_rows

@@ -659,7 +659,7 @@ def finalize_training_target_sidecars(
         if not structured_path.exists() or not metadata_file.exists():
             continue
 
-        training_tensor_path = Path(str(result["tensorPath"])).with_suffix(".training.pt")
+        training_tensor_path = structured_path.with_suffix(".training.pt")
         should_write_training = config.overwrite or not training_tensor_path.exists()
 
         if should_write_training:
@@ -700,7 +700,7 @@ def finalize_training_target_sidecars(
             training_v2_path = (
                 Path(str(training_v2_tensor_path))
                 if training_v2_tensor_path
-                else Path(str(result["tensorPath"])).with_suffix(".v2.training.pt")
+                else structured_path.with_suffix(".v2.training.pt")
             )
             should_write_training_v2 = config.overwrite or not training_v2_path.exists()
             if should_write_training_v2 and structured_v2_path.exists():

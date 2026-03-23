@@ -740,6 +740,56 @@ export function getObservationFeatureSchema({ maxEntities = 128, spatialSize = 3
   };
 }
 
+const GAME_STATS_FEATURE_NAMES = [
+  "stats_score",
+  "stats_credits_gained",
+  "stats_buildings_captured",
+  "stats_units_built_aircraft",
+  "stats_units_built_building",
+  "stats_units_built_infantry",
+  "stats_units_built_vehicle",
+  "stats_units_killed_aircraft",
+  "stats_units_killed_building",
+  "stats_units_killed_infantry",
+  "stats_units_killed_vehicle",
+  "stats_units_lost_aircraft",
+  "stats_units_lost_building",
+  "stats_units_lost_infantry",
+  "stats_units_lost_vehicle",
+];
+
+function counterByTypeCount(counterArray, objectType) {
+  if (!Array.isArray(counterArray)) {
+    return 0;
+  }
+  const entry = counterArray.find((item) => item.objectType === objectType);
+  return entry ? safeNumber(entry.count) : 0;
+}
+
+function buildGameStatsFeatures(snapshot) {
+  const stats = snapshot.player?.stats;
+  if (!stats) {
+    return null;
+  }
+  return [
+    safeNumber(snapshot.player.score),
+    safeNumber(stats.creditsGained),
+    safeNumber(stats.buildingsCaptured),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Aircraft),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Building),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Infantry),
+    counterByTypeCount(stats.unitsBuiltByType, OBJECT_TYPE.Vehicle),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Aircraft),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Building),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Infantry),
+    counterByTypeCount(stats.unitsKilledByType, OBJECT_TYPE.Vehicle),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Aircraft),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Building),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Infantry),
+    counterByTypeCount(stats.unitsLostByType, OBJECT_TYPE.Vehicle),
+  ];
+}
+
 export function extractObservationFeatureSample(
   gameApi,
   { playerName, maxEntities = 128, spatialSize = 32, minimapSize = 64, internalGame = null } = {},
@@ -770,6 +820,8 @@ export function extractObservationFeatureSample(
     entityMeta: entities.entityMeta,
     spatial: buildSpatialFeatures(gameApi, snapshot, spatialSize),
     minimap: buildMinimapFeatures(gameApi, snapshot, minimapSize),
+    gameStatsFeatureNames: GAME_STATS_FEATURE_NAMES.slice(),
+    gameStatsFeatures: buildGameStatsFeatures(snapshot),
     countsByName: {
       self: sortedCountMap(aggregates.self.countsByName),
       allied: sortedCountMap(aggregates.allied.countsByName),

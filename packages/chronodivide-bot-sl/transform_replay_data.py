@@ -77,6 +77,7 @@ from transform_lib.feature_layout import (
     augment_dataset_with_current_selection_summary,
     augment_dataset_with_enemy_memory_bow,
     augment_dataset_with_entity_intent_summary,
+    augment_dataset_with_entity_threat,
     augment_dataset_with_game_stats,
     augment_dataset_with_map_static,
     augment_dataset_with_owned_composition_bow,
@@ -90,9 +91,6 @@ from transform_lib.schema_utils import (
     build_sample_context_tensors,
     build_section_offsets,
     build_structured_section_tensors,
-    build_tensors,
-    validate_flat_matches_sections,
-    validate_flat_tensor_lengths,
     validate_section_shapes,
 )
 from transform_lib.training_targets import finalize_training_target_sidecars
@@ -105,6 +103,22 @@ def node_player_arg(player: str) -> str | None:
     if normalized.lower() == "first":
         return None
     return normalized
+
+
+def resolve_player_for_replay(config: TransformConfig, replay_path: Path) -> str:
+    """Resolve the effective player selection for a specific replay.
+
+    Checks player_map first (keyed by resolved path string), then falls back to config.player.
+    """
+    if config.player_map is not None:
+        key = str(replay_path.resolve())
+        if key in config.player_map:
+            return config.player_map[key]
+        # Also try the original (non-resolved) path
+        key2 = str(replay_path)
+        if key2 in config.player_map:
+            return config.player_map[key2]
+    return config.player
 
 
 def build_node_command(config: TransformConfig, replay_path: Path, output_path: Path) -> list[str]:
@@ -129,7 +143,8 @@ def build_node_command(config: TransformConfig, replay_path: Path, output_path: 
         str(output_path),
     ]
 
-    player_arg = node_player_arg(config.player)
+    effective_player = resolve_player_for_replay(config, replay_path)
+    player_arg = node_player_arg(effective_player)
     if player_arg:
         command.extend(["--player", player_arg])
     if config.include_no_action:
@@ -336,33 +351,27 @@ def write_player_shard(
     player_counts: dict[str, Any],
 ) -> dict[str, Any]:
     output_stem = player_output_stem(replay_path, player_name)
-    tensor_path = config.output_dir / f"{output_stem}.pt"
     structured_tensor_path = config.output_dir / f"{output_stem}.sections.pt"
     structured_v2_tensor_path = config.output_dir / f"{output_stem}.v2.sections.pt"
     metadata_path = config.output_dir / f"{output_stem}.meta.json"
 
-    if tensor_path.exists() and structured_tensor_path.exists() and metadata_path.exists() and not config.overwrite:
+    if structured_tensor_path.exists() and metadata_path.exists() and not config.overwrite:
         return {
             "status": "skipped",
             "replay": str(replay_path),
             "playerName": player_name,
-            "tensorPath": str(tensor_path),
             "structuredTensorPath": str(structured_tensor_path),
             "metadataPath": str(metadata_path),
             "reason": "existing shard",
         }
 
-    validate_flat_tensor_lengths(samples, dataset["schema"], replay_path.name, player_name)
     validate_section_shapes(samples, dataset["schema"]["featureSections"], "featureTensors", replay_path.name, player_name)
     validate_section_shapes(samples, dataset["schema"]["labelSections"], "labelTensors", replay_path.name, player_name)
-    validate_flat_matches_sections(samples, dataset["schema"], replay_path.name, player_name)
-    features, labels = build_tensors(samples)
     feature_section_tensors = build_structured_section_tensors(samples, dataset["schema"]["featureSections"], "featureTensors")
     label_section_tensors = build_structured_section_tensors(samples, dataset["schema"]["labelSections"], "labelTensors")
     sample_context_tensors = build_sample_context_tensors(samples)
 
-    ensure_parent(tensor_path)
-    torch.save((features, labels), tensor_path)
+    ensure_parent(structured_tensor_path)
     torch.save(
         {
             "featureTensors": feature_section_tensors,
@@ -412,19 +421,7 @@ def write_player_shard(
         "replay": dataset["replay"],
         "playerName": player_name,
         "sampleCount": len(samples),
-        "featureShape": list(features.shape),
-        "labelShape": list(labels.shape),
-        "featureDType": str(features.dtype),
-        "labelDType": str(labels.dtype),
         "schema": dataset["schema"],
-        "legacyFeatureSchema": {
-            "featureSections": dataset.get("legacyFeatureSections", []),
-            "flatFeatureLength": dataset.get("legacyFlatFeatureLength"),
-        },
-        "legacyLabelSchema": {
-            "labelSections": dataset.get("legacyLabelSections", []),
-            "flatLabelLength": dataset.get("legacyFlatLabelLength"),
-        },
         "featureSectionOffsets": build_section_offsets(dataset["schema"]["featureSections"]),
         "labelSectionOffsets": build_section_offsets(dataset["schema"]["labelSections"]),
         "structuredFeatureShapes": {
@@ -453,7 +450,6 @@ def write_player_shard(
             ),
             "channelNames": dataset.get("staticMapSchema", {}).get("staticMapChannelNames"),
         },
-        "tensorPath": str(tensor_path),
         "structuredTensorPath": str(structured_tensor_path),
         "structuredV2TensorPath": str(structured_v2_tensor_path) if v2_samples else None,
         "structuredFeatureShapesV2": structured_feature_shapes_v2,
@@ -471,9 +467,6 @@ def write_player_shard(
         "sampleCount": len(samples),
         "sourceSampleCount": int(filter_stats["sourceSampleCount"]),
         "droppedSampleCount": int(filter_stats["droppedSampleCount"]),
-        "featureShape": list(features.shape),
-        "labelShape": list(labels.shape),
-        "tensorPath": str(tensor_path),
         "structuredTensorPath": str(structured_tensor_path),
         "structuredV2TensorPath": str(structured_v2_tensor_path) if v2_samples else None,
         "metadataPath": str(metadata_path),
@@ -498,6 +491,7 @@ def transform_single_replay(config: TransformConfig, replay_path: Path, run_stat
     augment_dataset_with_super_weapon_state(dataset)
     augment_dataset_with_enemy_memory_bow(dataset)
     augment_dataset_with_entity_intent_summary(dataset)
+    augment_dataset_with_entity_threat(dataset)
     augment_dataset_with_map_static(dataset)
     dataset["filterConfig"] = build_filter_config(config)
     grouped_samples = group_samples_by_player(dataset.get("samples", []))
@@ -555,6 +549,8 @@ def write_manifest(
     config_dict["data_dir"] = str(config.data_dir)
     config_dict["py_chronodivide_script"] = str(config.py_chronodivide_script)
     config_dict["extract_cache_dir"] = str(config.extract_cache_dir) if config.extract_cache_dir is not None else None
+    config_dict["replay_list"] = [str(p) for p in config.replay_list] if config.replay_list is not None else None
+    config_dict["player_map"] = config.player_map  # already JSON-serializable (dict[str, str]) or None
 
     manifest = {
         "createdAt": utc_now_iso(),

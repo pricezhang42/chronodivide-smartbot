@@ -27,26 +27,10 @@ export type CurriculumAction = {
 
 const SOVIET_BUILD_ORDER: CurriculumStep[] = [
     { type: "deploy_mcv", objectName: "SMCV" },
-    { type: "queue", objectName: "NAPOWR", queueType: QueueType.Structures },
-    { type: "place", objectName: "NAPOWR" },
-    { type: "queue", objectName: "NAREFN", queueType: QueueType.Structures },
-    { type: "place", objectName: "NAREFN" },
-    { type: "queue", objectName: "NAHAND", queueType: QueueType.Structures },
-    { type: "place", objectName: "NAHAND" },
-    { type: "queue", objectName: "NAWEAP", queueType: QueueType.Structures },
-    { type: "place", objectName: "NAWEAP" },
 ];
 
 const ALLIED_BUILD_ORDER: CurriculumStep[] = [
     { type: "deploy_mcv", objectName: "AMCV" },
-    { type: "queue", objectName: "GAPOWR", queueType: QueueType.Structures },
-    { type: "place", objectName: "GAPOWR" },
-    { type: "queue", objectName: "GAREFN", queueType: QueueType.Structures },
-    { type: "place", objectName: "GAREFN" },
-    { type: "queue", objectName: "GAPILE", queueType: QueueType.Structures },
-    { type: "place", objectName: "GAPILE" },
-    { type: "queue", objectName: "GAWEAP", queueType: QueueType.Structures },
-    { type: "place", objectName: "GAWEAP" },
 ];
 
 const MAX_CURRICULUM_TICK = 5000;
