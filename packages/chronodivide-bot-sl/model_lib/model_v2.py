@@ -34,6 +34,7 @@ class RA2SLV2DebugConfig:
     max_entities: int = 128
     spatial_size: int = 64
     build_order_vocab_size: int = 512
+    action_context_vocab_size: int = 0
     scalar_hidden_dim: int = 64
     scalar_output_dim: int = 128
     entity_model_dim: int = 64
@@ -46,6 +47,9 @@ class RA2SLV2DebugConfig:
     use_lstm_core: bool = False
     lstm_num_layers: int = 1
     dropout: float = 0.1
+    build_order_dim: int = 128
+    build_order_num_heads: int = 4
+    build_order_num_layers: int = 3
 
 
 class RA2SLV2DebugModel(nn.Module):
@@ -56,6 +60,7 @@ class RA2SLV2DebugModel(nn.Module):
             RA2SLCoreConfig(
                 entity_name_vocab_size=config.entity_name_vocab_size,
                 build_order_vocab_size=config.build_order_vocab_size,
+                action_context_vocab_size=config.action_context_vocab_size,
                 scalar_hidden_dim=config.scalar_hidden_dim,
                 scalar_output_dim=config.scalar_output_dim,
                 entity_model_dim=config.entity_model_dim,
@@ -67,6 +72,9 @@ class RA2SLV2DebugModel(nn.Module):
                 use_lstm_core=config.use_lstm_core,
                 lstm_num_layers=config.lstm_num_layers,
                 dropout=config.dropout,
+                build_order_dim=config.build_order_dim,
+                build_order_num_heads=config.build_order_num_heads,
+                build_order_num_layers=config.build_order_num_layers,
             )
         )
         self.action_family_head = MLPHead(

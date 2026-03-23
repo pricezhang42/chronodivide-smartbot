@@ -1,7 +1,9 @@
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { BotContext, GameApi, PlayerApi, PlayerData } from "@chronodivide/game-api";
+import { BotContext, GameApi, ObjectType, PlayerApi, PlayerData, Vector2 } from "@chronodivide/game-api";
+
+import { computeAdjacentRect } from "../common/tileUtils.js";
 
 import type {
     LivePolicyFeaturePayload,
@@ -258,6 +260,55 @@ function buildSuperWeaponRechargeSecondsByType(
     return values;
 }
 
+const BUILDABILITY_ADJACENT_DISTANCE = 3;
+
+function buildLiveBuildabilityMask(
+    context: LiveFeatureBuilderContext,
+    buildingName: string,
+    spatialSize: number,
+): number[][] {
+    const mask: number[][] = Array.from({ length: spatialSize }, () => Array(spatialSize).fill(0));
+    const mapSize = context.game.map.getRealMapSize();
+    if (!mapSize || mapSize.width <= 0 || mapSize.height <= 0) {
+        return mask;
+    }
+
+    const maxTileX = Math.max(1, mapSize.width - 1);
+    const maxTileY = Math.max(1, mapSize.height - 1);
+    const playerName = context.player.name;
+
+    // Get all own buildings to find candidate placement areas.
+    const buildingIds = context.game.getVisibleUnits(playerName, "self", (r) => r.type === ObjectType.Building);
+    const checkedTiles = new Set<string>();
+
+    for (const buildingId of buildingIds) {
+        const building = context.game.getUnitData(buildingId);
+        if (!building?.rules?.baseNormal || !building.foundation || !building.tile) {
+            continue;
+        }
+        const buildingBase = new Vector2(building.tile.rx, building.tile.ry);
+        const buildingSize = { width: building.foundation.width, height: building.foundation.height };
+        const rect = computeAdjacentRect(buildingBase, buildingSize, BUILDABILITY_ADJACENT_DISTANCE);
+        const adjacentTiles = context.game.mapApi.getTilesInRect(rect);
+
+        for (const tile of adjacentTiles) {
+            const tileKey = `${tile.rx},${tile.ry}`;
+            if (checkedTiles.has(tileKey)) {
+                continue;
+            }
+            checkedTiles.add(tileKey);
+
+            if (context.game.canPlaceBuilding(playerName, buildingName, tile)) {
+                const gridX = Math.min(spatialSize - 1, Math.max(0, Math.floor((tile.rx / maxTileX) * spatialSize)));
+                const gridY = Math.min(spatialSize - 1, Math.max(0, Math.floor((tile.ry / maxTileY) * spatialSize)));
+                mask[gridY][gridX] = 1;
+            }
+        }
+    }
+
+    return mask;
+}
+
 export async function buildLivePolicyFeaturePayload(
     context: LiveFeatureBuilderContext,
     runtimeState: LivePolicyRuntimeState,
@@ -275,6 +326,8 @@ export async function buildLivePolicyFeaturePayload(
         spatialSize: DEFAULT_SPATIAL_SIZE,
         buildabilityReferenceName: getStaticMapReferenceBuildingName(playerData),
     });
+    const referenceBuildingName = getStaticMapReferenceBuildingName(playerData);
+    const liveBuildabilityMask = buildLiveBuildabilityMask(context, referenceBuildingName, DEFAULT_SPATIAL_SIZE);
 
     const playerProduction = context.player.production
         ? modules.productionToPlain(context.player.production) ?? null
@@ -353,6 +406,7 @@ export async function buildLivePolicyFeaturePayload(
         playerSuperWeapons,
         replayPlayers: buildReplayPlayers(context.game),
         superWeaponRechargeSecondsByType: buildSuperWeaponRechargeSecondsByType(playerSuperWeapons),
+        liveBuildabilityMask,
         runtimeState: {
             ...runtimeState,
             buildOrderActionTypeNamesV1: runtimeState.buildOrderActionTypeNamesV1.slice(),
@@ -362,6 +416,9 @@ export async function buildLivePolicyFeaturePayload(
             pendingBuildingQueueByQueueName: {
                 ...(runtimeState.pendingBuildingQueueByQueueName ?? {}),
             },
+            lastOrderByUnitId: runtimeState.lastOrderByUnitId
+                ? { ...runtimeState.lastOrderByUnitId }
+                : undefined,
         },
     };
 }

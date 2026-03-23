@@ -17,6 +17,7 @@ from model_lib.dataset import (
     RA2SLSequenceWindowDataset,
     discover_model_shards,
 )
+from action_dict import ACTION_TYPE_ID_TO_NAME
 from model_lib.losses_v2 import compute_ra2_sl_v2_free_running_metrics, compute_ra2_sl_v2_loss
 from model_lib.model_v2 import RA2SLV2DebugConfig, RA2SLV2DebugModel
 from post_train_arena_eval import DEFAULT_DRIVER_DIR, run_post_train_arena_eval
@@ -287,6 +288,7 @@ def infer_v2_model_config(records: list[ModelShardRecord], config: TrainConfigV2
         max_commanded_units=max_commanded_units,
         max_entities=max_entities,
         spatial_size=max_spatial_size,
+        action_context_vocab_size=len(ACTION_TYPE_ID_TO_NAME),
         use_lstm_core=config.use_lstm_core,
         lstm_num_layers=config.lstm_num_layers,
     )

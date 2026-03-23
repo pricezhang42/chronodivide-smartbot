@@ -309,12 +309,39 @@ function queueToPlain(queue) {
   };
 }
 
+function collectQueues(production) {
+  if (production.queues instanceof Map) {
+    return Array.from(production.queues.values());
+  }
+  if (typeof production.getQueueData === "function") {
+    const queried = [];
+    for (const queueType of Object.keys(QUEUE_TYPE_NAMES)) {
+      try {
+        const numericQueueType = Number(queueType);
+        const queueData = production.getQueueData(numericQueueType);
+        if (queueData) {
+          // Wrap with queue type if not present (getQueueData callers already know the type)
+          const entry =
+            queueData.type === undefined || queueData.type === null
+              ? { ...queueData, type: numericQueueType }
+              : queueData;
+          queried.push(entry);
+        }
+      } catch {
+        // skip inaccessible queue types
+      }
+    }
+    return queried;
+  }
+  return [];
+}
+
 export function productionToPlain(production) {
   if (!production) {
     return undefined;
   }
 
-  const queues = production.queues instanceof Map ? Array.from(production.queues.values()) : [];
+  const queues = collectQueues(production);
   const queueSummaries = queues.map(queueToPlain).filter(Boolean);
   const factoryCounts =
     production.factoryCounts instanceof Map

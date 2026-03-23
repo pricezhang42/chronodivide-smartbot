@@ -286,28 +286,20 @@ def build_v1_feature_sections(legacy_feature_sections: list[dict[str, Any]]) -> 
 def augment_dataset_with_feature_context_v1(dataset: dict[str, Any]) -> None:
     samples = dataset.get("samples", [])
     legacy_feature_sections = copy.deepcopy(dataset["schema"]["featureSections"])
-    dataset["legacyFeatureSections"] = legacy_feature_sections
-    dataset["legacyFlatFeatureLength"] = int(dataset["schema"]["flatFeatureLength"])
 
     dataset["featureContextV1"] = {
         "version": FEATURE_CONTEXT_V1_VERSION,
-        "mainTensorUsesV1Only": True,
         "lastActionContextShape": [3],
         "lastActionContextFields": [
             "delayFromPreviousAction",
             "lastActionTypeIdV1",
             "lastQueue",
         ],
-        "notes": [
-            "This mirrors mini-AlphaStar more closely than the legacy four-value context.",
-            "Legacy feature context remains available in metadata during the migration period.",
-        ],
     }
 
     for sample in samples:
-        sample["legacyFeatureTensors"] = copy.deepcopy(sample["featureTensors"])
+        legacy_last_action_context = sample["featureTensors"].get("lastActionContext", [])
         previous_delay = LABEL_LAYOUT_V1_MISSING_INT
-        legacy_last_action_context = sample["legacyFeatureTensors"].get("lastActionContext", [])
         if len(legacy_last_action_context) > 0:
             previous_delay = int(legacy_last_action_context[0])
         sample["featureTensors"]["lastActionContext"] = [
@@ -458,8 +450,6 @@ def build_label_layout_v1_metadata(samples: list[dict[str, Any]], dataset: dict[
 def augment_dataset_with_label_layout_v1(dataset: dict[str, Any]) -> None:
     samples = dataset.get("samples", [])
     legacy_label_sections = copy.deepcopy(dataset["schema"]["labelSections"])
-    dataset["legacyLabelSections"] = legacy_label_sections
-    dataset["legacyFlatLabelLength"] = int(dataset["schema"]["flatLabelLength"])
 
     if not samples:
         dataset["labelLayoutV1"] = {

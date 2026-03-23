@@ -239,7 +239,7 @@ function buildFeatureTensors(rawSample, nameVocabulary, options) {
     entityNameTokens.push(nameVocabulary.nameToId["<pad>"]);
   }
 
-  return {
+  const featureTensors = {
     scalar: rawSample.feature.scalarFeatures.slice(),
     lastActionContext: [
       numericOrDefault(rawSample.label.delayFromPreviousAction, DEFAULT_MISSING_INT),
@@ -259,6 +259,12 @@ function buildFeatureTensors(rawSample, nameVocabulary, options) {
     spatial: rawSample.feature.spatial.data.map((plane) => plane.map((row) => row.slice())),
     minimap: rawSample.feature.minimap.data.map((plane) => plane.map((row) => row.slice())),
   };
+
+  if (Array.isArray(rawSample.feature.gameStatsFeatures)) {
+    featureTensors.gameStats = rawSample.feature.gameStatsFeatures.slice();
+  }
+
+  return featureTensors;
 }
 
 function buildLabelTensors(rawSample, nameVocabulary, options) {
@@ -603,6 +609,7 @@ export async function extractReplaySupervisedDataset({
                   maxEntities,
                   spatialSize,
                   minimapSize,
+                  internalGame: context.internalGame,
                 }),
               );
             }

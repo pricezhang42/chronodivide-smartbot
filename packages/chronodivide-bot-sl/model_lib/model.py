@@ -14,6 +14,7 @@ from model_lib.encoders import (
     SpatialEncoder,
     SpatialEncoderConfig,
     pool_selected_entity_embeddings,
+    scatter_entity_embeddings,
 )
 from model_lib.heads import RA2SLHeadsConfig, RA2SLPredictionHeads
 from transform_lib.common import LABEL_LAYOUT_V1_DELAY_BINS
@@ -23,6 +24,7 @@ from transform_lib.common import LABEL_LAYOUT_V1_DELAY_BINS
 class RA2SLCoreConfig:
     entity_name_vocab_size: int
     build_order_vocab_size: int = len(ACTION_TYPE_ID_TO_NAME)
+    action_context_vocab_size: int = len(ACTION_TYPE_ID_TO_NAME)
     scalar_hidden_dim: int = 64
     scalar_output_dim: int = 128
     entity_model_dim: int = 64
@@ -34,6 +36,9 @@ class RA2SLCoreConfig:
     use_lstm_core: bool = False
     lstm_num_layers: int = 1
     dropout: float = 0.1
+    build_order_dim: int = 128
+    build_order_num_heads: int = 4
+    build_order_num_layers: int = 3
 
 
 class RA2SLCoreModel(nn.Module):
@@ -43,9 +48,13 @@ class RA2SLCoreModel(nn.Module):
         self.scalar_encoder = ScalarEncoder(
             ScalarEncoderConfig(
                 build_order_vocab_size=config.build_order_vocab_size,
+                action_context_vocab_size=config.action_context_vocab_size,
                 hidden_dim=config.scalar_hidden_dim,
                 output_dim=config.scalar_output_dim,
                 dropout=config.dropout,
+                build_order_dim=config.build_order_dim,
+                build_order_num_heads=config.build_order_num_heads,
+                build_order_num_layers=config.build_order_num_layers,
             )
         )
         self.entity_encoder = EntityEncoder(
@@ -62,6 +71,7 @@ class RA2SLCoreModel(nn.Module):
                 hidden_dim=config.spatial_hidden_dim,
                 output_dim=config.spatial_output_dim,
                 dropout=config.dropout,
+                entity_scatter_dim=config.entity_model_dim,
             )
         )
         fusion_input_dim = (
@@ -142,10 +152,20 @@ class RA2SLCoreModel(nn.Module):
             flat_scalar_sections["currentSelectionIndices"],
             flat_scalar_sections["currentSelectionResolvedMask"],
         )
+        # Scatter entity embeddings onto spatial grid
+        minimap_h, minimap_w = flat_spatial_inputs["minimap"].shape[-2:]
+        entity_scatter_map = scatter_entity_embeddings(
+            entity_outputs["per_entity"],
+            flat_entity_inputs["features"],
+            entity_outputs["mask"],
+            grid_h=minimap_h,
+            grid_w=minimap_w,
+        )
         spatial_outputs = self.spatial_encoder(
             spatial=flat_spatial_inputs["spatial"],
             minimap=flat_spatial_inputs["minimap"],
             map_static=flat_spatial_inputs["map_static"],
+            entity_scatter_map=entity_scatter_map,
         )
 
         fused_input = torch.cat(
@@ -195,6 +215,7 @@ class RA2SLBaselineConfig:
     max_entities: int = 128
     spatial_size: int = 64
     build_order_vocab_size: int = len(ACTION_TYPE_ID_TO_NAME)
+    action_context_vocab_size: int = 0
     scalar_hidden_dim: int = 64
     scalar_output_dim: int = 128
     entity_model_dim: int = 64
@@ -207,6 +228,9 @@ class RA2SLBaselineConfig:
     use_lstm_core: bool = False
     lstm_num_layers: int = 1
     dropout: float = 0.1
+    build_order_dim: int = 128
+    build_order_num_heads: int = 4
+    build_order_num_layers: int = 3
 
 
 class RA2SLBaselineModel(nn.Module):
@@ -217,6 +241,7 @@ class RA2SLBaselineModel(nn.Module):
             RA2SLCoreConfig(
                 entity_name_vocab_size=config.entity_name_vocab_size,
                 build_order_vocab_size=config.build_order_vocab_size,
+                action_context_vocab_size=config.action_context_vocab_size,
                 scalar_hidden_dim=config.scalar_hidden_dim,
                 scalar_output_dim=config.scalar_output_dim,
                 entity_model_dim=config.entity_model_dim,
@@ -228,6 +253,9 @@ class RA2SLBaselineModel(nn.Module):
                 use_lstm_core=config.use_lstm_core,
                 lstm_num_layers=config.lstm_num_layers,
                 dropout=config.dropout,
+                build_order_dim=config.build_order_dim,
+                build_order_num_heads=config.build_order_num_heads,
+                build_order_num_layers=config.build_order_num_layers,
             )
         )
         self.heads = RA2SLPredictionHeads(

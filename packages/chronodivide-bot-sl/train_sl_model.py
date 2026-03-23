@@ -629,6 +629,7 @@ def main() -> None:
     model = RA2SLBaselineModel(
         RA2SLBaselineConfig(
             entity_name_vocab_size=entity_name_vocab_size,
+            action_context_vocab_size=len(ACTION_TYPE_ID_TO_NAME),
             use_lstm_core=config.use_lstm_core,
             lstm_num_layers=config.lstm_num_layers,
         )

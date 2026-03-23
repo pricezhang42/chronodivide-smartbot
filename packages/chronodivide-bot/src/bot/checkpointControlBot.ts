@@ -20,6 +20,7 @@ import type {
     LivePolicyRuntimeState,
 } from "./logic/modelcontrol/livePolicyTypes.js";
 import { QUEUE_TYPE_TO_ADVISOR_QUEUE, createInitialLivePolicyRuntimeState } from "./logic/modelcontrol/livePolicyTypes.js";
+import { BuildOrderCurriculum } from "./logic/modelcontrol/buildOrderCurriculum.js";
 
 const NATURAL_TICK_RATE = 15;
 const POLICY_UPDATE_INTERVAL_TICKS = 15;
@@ -116,10 +117,12 @@ export class CheckpointControlBot extends Bot {
     private readonly executedPlaceBuildingCounts: Record<string, number> = {};
     private readonly lastExecutedFamilyTick: Partial<Record<LivePolicyFamily, number>> = {};
     private readonly lastUnitCommandTickById = new Map<number, number>();
+    private readonly lastUnitOrderById = new Map<number, { orderType: string; tick: number }>();
     private lastPredictedFamily: LivePolicyFamily | null = null;
     private lastPredictedScore: number | null = null;
     private lastQueueActionSignature: string | null = null;
     private lastQueueActionTick = Number.NEGATIVE_INFINITY;
+    private curriculum: BuildOrderCurriculum | null = null;
 
     constructor(
         name: string,
@@ -138,7 +141,11 @@ export class CheckpointControlBot extends Bot {
             .filter((playerName) => playerName !== this.name)
             .forEach((playerName) => this.player.actions.toggleAlliance(playerName, true));
 
-        this.logBotStatus(`CheckpointControlBot started.`);
+        const playerData = game.getPlayerData(this.name);
+        const sideId =
+            (playerData.country as any)?.side ?? (playerData.country as any)?.rules?.side ?? 1;
+        this.curriculum = new BuildOrderCurriculum(Number(sideId));
+        this.logBotStatus(`CheckpointControlBot started (side=${sideId}).`);
     }
 
     override onGameTick(_game: GameApi) {
@@ -196,7 +203,19 @@ export class CheckpointControlBot extends Bot {
             return;
         }
 
+        // Curriculum phase: execute scripted build order before handing off to ML.
+        if (this.curriculum && !this.curriculum.isComplete(currentTick)) {
+            this.lastPolicyRequestTick = currentTick;
+            const playerData = this.game.getPlayerData(this.name);
+            const action = this.curriculum.tryExecuteNextStep(this.game, this.player, playerData);
+            if (action.executed) {
+                this.recordCurriculumAction(action.family, action.description);
+            }
+            return;
+        }
+
         this.lastPolicyRequestTick = currentTick;
+        this.syncPerUnitOrderState(currentTick);
         this.pendingPolicyRequest = buildLivePolicyFeaturePayload(this.context, this.runtimeState)
             .then((featurePayload) => this.policyClient.getAction({ featurePayload }))
             .then((output) => {
@@ -567,10 +586,12 @@ export class CheckpointControlBot extends Bot {
         this.lastExecutedFamilyTick[family] = tick;
         if (family === "Order" && legacyActionName?.startsWith("Order::")) {
             const parts = legacyActionName.split("::");
-            const recentOrders = [...(this.runtimeState.recentOrderTypeNamesV2 ?? []), parts[1] ?? "Unknown"];
+            const orderType = parts[1] ?? "Unknown";
+            const recentOrders = [...(this.runtimeState.recentOrderTypeNamesV2 ?? []), orderType];
             this.runtimeState.recentOrderTypeNamesV2 = recentOrders.slice(-16);
             selectedUnitIds.forEach((unitId) => {
                 this.lastUnitCommandTickById.set(unitId, tick);
+                this.lastUnitOrderById.set(unitId, { orderType, tick });
             });
         }
 
@@ -591,6 +612,48 @@ export class CheckpointControlBot extends Bot {
         this.runtimeState.lastFailedActionReason = reason;
         this.incrementCount(this.noopReasonCounts, reason);
         this.logBotStatus(`Noop: ${reason}`);
+    }
+
+    private syncPerUnitOrderState(currentTick: number): void {
+        const aliveIds = new Set(this.player.getVisibleUnits("self"));
+        // Clean dead units from tracking maps.
+        for (const unitId of this.lastUnitOrderById.keys()) {
+            if (!aliveIds.has(unitId)) {
+                this.lastUnitOrderById.delete(unitId);
+                this.lastUnitCommandTickById.delete(unitId);
+            }
+        }
+        // Build snapshot for runtimeState.
+        const snapshot: Record<number, { orderType: string; ticksSinceOrder: number }> = {};
+        for (const [unitId, entry] of this.lastUnitOrderById) {
+            snapshot[unitId] = {
+                orderType: entry.orderType,
+                ticksSinceOrder: Math.max(0, currentTick - entry.tick),
+            };
+        }
+        this.runtimeState.lastOrderByUnitId = snapshot;
+    }
+
+    private recordCurriculumAction(family: string, description: string): void {
+        const tick = this.game.getCurrentTick();
+        this.runtimeState.lastActionTick = tick;
+        this.runtimeState.lastActionTypeNameV1 = description;
+        this.runtimeState.lastFailedActionReason = null;
+
+        const recentFamilies = [...(this.runtimeState.recentActionFamilyNamesV2 ?? []), family];
+        this.runtimeState.recentActionFamilyNamesV2 = recentFamilies.slice(-16);
+        this.incrementCount(this.executedFamilyCounts, family);
+
+        if (
+            description.startsWith("curriculum:queue:") ||
+            description.startsWith("curriculum:place:") ||
+            description.startsWith("curriculum:deploy")
+        ) {
+            const trace = this.runtimeState.buildOrderActionTypeNamesV1.slice(-BUILD_ORDER_TRACE_LIMIT + 1);
+            trace.push(description);
+            this.runtimeState.buildOrderActionTypeNamesV1 = trace;
+        }
+        this.logBotStatus(`Curriculum: ${description}`);
     }
 
     private recordPendingBuildingQueue(queueType: QueueType, objectName: string): void {

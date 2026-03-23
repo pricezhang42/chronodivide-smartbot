@@ -127,6 +127,8 @@ class TransformConfig:
     replay_start: int
     max_replays: int | None
     player: str
+    player_map: dict[str, str] | None  # replay_path -> player_name override
+    replay_list: list[Path] | None  # explicit list of replay paths
     include_no_action: bool
     include_ui_actions: bool
     action_filter_profile: str
@@ -180,6 +182,8 @@ def parse_args(argv: list[str]) -> TransformConfig:
         default="first",
         help='Player selection mode: "first", "all", or an explicit player name.',
     )
+    parser.add_argument("--replay-list", type=Path, default=None, help="File with one replay path per line (overrides --replay-dir glob).")
+    parser.add_argument("--player-map", type=Path, default=None, help="JSON file mapping replay paths to player names (overrides --player per replay).")
     parser.add_argument("--include-no-action", action="store_true")
     parser.add_argument("--include-ui-actions", action="store_true")
     parser.add_argument("--action-filter-profile", choices=["none", "mas"], default="mas")
@@ -208,6 +212,22 @@ def parse_args(argv: list[str]) -> TransformConfig:
             if args.extract_cache_dir is not None
             else resolved_output_dir / "_extract_cache"
         )
+
+    # Load replay list if provided
+    replay_list: list[Path] | None = None
+    if args.replay_list is not None:
+        replay_list_path = args.replay_list.resolve()
+        with open(replay_list_path, "r") as f:
+            replay_list = [Path(line.strip()) for line in f if line.strip()]
+
+    # Load player map if provided
+    player_map: dict[str, str] | None = None
+    if args.player_map is not None:
+        import json
+        player_map_path = args.player_map.resolve()
+        with open(player_map_path, "r") as f:
+            player_map = json.load(f)
+
     return TransformConfig(
         replay_dir=args.replay_dir.resolve(),
         output_dir=resolved_output_dir,
@@ -219,6 +239,8 @@ def parse_args(argv: list[str]) -> TransformConfig:
         replay_start=max(0, args.replay_start),
         max_replays=args.max_replays,
         player=str(args.player),
+        player_map=player_map,
+        replay_list=replay_list,
         include_no_action=bool(args.include_no_action),
         include_ui_actions=bool(args.include_ui_actions),
         action_filter_profile=str(args.action_filter_profile),
@@ -241,7 +263,7 @@ def parse_args(argv: list[str]) -> TransformConfig:
 
 
 def validate_config(config: TransformConfig) -> None:
-    if not config.replay_dir.exists():
+    if config.replay_list is None and not config.replay_dir.exists():
         raise FileNotFoundError(f"Replay directory does not exist: {config.replay_dir}")
     if not config.data_dir.exists():
         raise FileNotFoundError(f"Chronodivide data directory does not exist: {config.data_dir}")
@@ -250,7 +272,10 @@ def validate_config(config: TransformConfig) -> None:
 
 
 def list_replays(config: TransformConfig) -> list[Path]:
-    replay_paths = sorted(config.replay_dir.glob(config.replay_glob))
+    if config.replay_list is not None:
+        replay_paths = list(config.replay_list)
+    else:
+        replay_paths = sorted(config.replay_dir.glob(config.replay_glob))
     replay_paths = replay_paths[config.replay_start :]
     if config.max_replays is not None:
         replay_paths = replay_paths[: config.max_replays]

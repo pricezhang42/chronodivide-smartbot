@@ -14,6 +14,7 @@ from model_lib.dataset import (
     RA2SLSequenceWindowDataset,
     summarize_model_shards,
 )
+from action_dict import ACTION_TYPE_ID_TO_NAME
 from model_lib.losses import compute_ra2_sl_loss
 from model_lib.model import RA2SLBaselineConfig, RA2SLBaselineModel
 
@@ -76,6 +77,7 @@ def main() -> None:
     model = RA2SLBaselineModel(
         RA2SLBaselineConfig(
             entity_name_vocab_size=shared_vocab_size,
+            action_context_vocab_size=len(ACTION_TYPE_ID_TO_NAME),
             use_lstm_core=bool(args.use_lstm_core),
             lstm_num_layers=int(args.lstm_num_layers),
         )

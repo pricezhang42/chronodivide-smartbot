@@ -9,5 +9,6 @@
             "path": "../chronodivide-bot"
         }
     ],
-    "include": ["src/**/*"]
+    "include": ["src/**/*"],
+    "exclude": ["src/test/**/*"]
 }
