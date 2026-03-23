@@ -1,0 +1,200 @@
+{
+  "generatedAt": "2026-03-21T19:29:40.724Z",
+  "mapName": "2_pinch_point_le.map",
+  "matchCount": 1,
+  "maxTicks": 5000,
+  "sampleIntervalTicks": 15,
+  "checkpointPath": "D:/workspace/supalosa-chronodivide-bot/packages/chronodivide-bot-sl/model_runs/v2_debug_winner81_full_gpu_20260320/checkpoints/best.pt",
+  "candidate": {
+    "mode": "control",
+    "country": "Arabs"
+  },
+  "opponent": {
+    "mode": "baseline",
+    "country": "Arabs"
+  },
+  "aggregate": {
+    "wins": 0,
+    "losses": 0,
+    "draws": 1,
+    "winRate": 0,
+    "averageDurationSeconds": 83.33333333333333,
+    "averageCurrentTick": 5000,
+    "candidate": {
+      "averageUsedMoney": 10500,
+      "averageFinalCredits": 6870,
+      "averageEconomyValueFinal": 3400,
+      "averageDevelopmentValueFinal": 2500,
+      "averageMilitaryValueFinal": 0,
+      "averageEconomyValuePeak": 3400,
+      "averageDevelopmentValuePeak": 6100,
+      "averageMilitaryValuePeak": 900,
+      "averageHarvestersFinal": 1,
+      "averageRefineriesFinal": 1,
+      "averagePowerBuildingsFinal": 0,
+      "averageProductionBuildingsFinal": 2,
+      "averageTechBuildingsFinal": 2,
+      "averageCombatUnitsFinal": 0,
+      "averageDefenseBuildingsFinal": 0
+    },
+    "opponent": {
+      "averageUsedMoney": 14400,
+      "averageFinalCredits": 0,
+      "averageEconomyValueFinal": 3400,
+      "averageDevelopmentValueFinal": 6700,
+      "averageMilitaryValueFinal": 4300,
+      "averageEconomyValuePeak": 3400,
+      "averageDevelopmentValuePeak": 6700,
+      "averageMilitaryValuePeak": 4300,
+      "averageHarvestersFinal": 1,
+      "averageRefineriesFinal": 1,
+      "averagePowerBuildingsFinal": 2,
+      "averageProductionBuildingsFinal": 3,
+      "averageTechBuildingsFinal": 4,
+      "averageCombatUnitsFinal": 34,
+      "averageDefenseBuildingsFinal": 0
+    },
+    "candidateControl": {
+      "predictedFamilyCounts": {
+        "Order": 115,
+        "Noop": 5,
+        "Queue": 2
+      },
+      "executedFamilyCounts": {
+        "Queue": 6,
+        "Order": 5,
+        "PlaceBuilding": 4
+      },
+      "noopReasonCounts": {
+        "order_units_unresolved:Move": 111,
+        "family=Noop": 5
+      },
+      "predictedOrderTypeCounts": {
+        "Move": 115
+      },
+      "executedOrderTypeCounts": {
+        "Move": 4
+      },
+      "predictedQueueUpdateCounts": {
+        "Add": 2
+      },
+      "executedQueueUpdateCounts": {
+        "Add": 2
+      },
+      "predictedQueueObjectCounts": {
+        "E2": 1,
+        "NAWEAP": 1
+      },
+      "executedQueueObjectCounts": {
+        "E2": 1,
+        "NAWEAP": 1
+      },
+      "predictedPlaceBuildingCounts": {},
+      "executedPlaceBuildingCounts": {}
+    },
+    "opponentControl": {
+      "predictedFamilyCounts": {},
+      "executedFamilyCounts": {},
+      "noopReasonCounts": {},
+      "predictedOrderTypeCounts": {},
+      "executedOrderTypeCounts": {},
+      "predictedQueueUpdateCounts": {},
+      "executedQueueUpdateCounts": {},
+      "predictedQueueObjectCounts": {},
+      "executedQueueObjectCounts": {},
+      "predictedPlaceBuildingCounts": {},
+      "executedPlaceBuildingCounts": {}
+    }
+  },
+  "matches": [
+    {
+      "matchIndex": 1,
+      "finished": false,
+      "winner": "unknown",
+      "currentTick": 5000,
+      "durationSeconds": 83.33333333333333,
+      "replayPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-driver\\curriculum-test-results5\\replays\\2_pinch_point_le.map_1774121380720.rpl",
+      "checkpointPath": "D:/workspace/supalosa-chronodivide-bot/packages/chronodivide-bot-sl/model_runs/v2_debug_winner81_full_gpu_20260320/checkpoints/best.pt",
+      "candidate": {
+        "credits": 6870,
+        "economyValue": 3400,
+        "developmentValue": 2500,
+        "militaryValue": 0,
+        "harvesterCount": 1,
+        "refineryCount": 1,
+        "powerBuildingCount": 0,
+        "productionBuildingCount": 2,
+        "techBuildingCount": 2,
+        "combatUnitCount": 0,
+        "defenseBuildingCount": 0,
+        "defeated": false,
+        "usedMoney": 10500,
+        "peakEconomyValue": 3400,
+        "peakDevelopmentValue": 6100,
+        "peakMilitaryValue": 900,
+        "peakCredits": 10000
+      },
+      "opponent": {
+        "credits": 0,
+        "economyValue": 3400,
+        "developmentValue": 6700,
+        "militaryValue": 4300,
+        "harvesterCount": 1,
+        "refineryCount": 1,
+        "powerBuildingCount": 2,
+        "productionBuildingCount": 3,
+        "techBuildingCount": 4,
+        "combatUnitCount": 34,
+        "defenseBuildingCount": 0,
+        "defeated": false,
+        "usedMoney": 14400,
+        "peakEconomyValue": 3400,
+        "peakDevelopmentValue": 6700,
+        "peakMilitaryValue": 4300,
+        "peakCredits": 10000
+      },
+      "candidateControlStats": {
+        "predictedFamilyCounts": {
+          "Order": 115,
+          "Noop": 5,
+          "Queue": 2
+        },
+        "executedFamilyCounts": {
+          "Order": 5,
+          "Queue": 6,
+          "PlaceBuilding": 4
+        },
+        "noopReasonCounts": {
+          "order_units_unresolved:Move": 111,
+          "family=Noop": 5
+        },
+        "predictedOrderTypeCounts": {
+          "Move": 115
+        },
+        "executedOrderTypeCounts": {
+          "Move": 4
+        },
+        "predictedQueueUpdateCounts": {
+          "Add": 2
+        },
+        "executedQueueUpdateCounts": {
+          "Add": 2
+        },
+        "predictedQueueObjectCounts": {
+          "NAWEAP": 1,
+          "E2": 1
+        },
+        "executedQueueObjectCounts": {
+          "NAWEAP": 1,
+          "E2": 1
+        },
+        "predictedPlaceBuildingCounts": {},
+        "executedPlaceBuildingCounts": {},
+        "lastFailedActionReason": "order_units_unresolved:Move",
+        "lastPredictedFamily": "Order",
+        "lastPredictedScore": 0.9027302265167236
+      },
+      "opponentControlStats": null
+    }
+  ]
+}

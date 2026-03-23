@@ -1,0 +1,60 @@
+{
+  "createdAt": "2026-03-18T21:08:45.055530+00:00",
+  "label": "pinch_point_arabs_v1",
+  "tensorDir": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\feature_layout_v1_validation_5replays_fix_20260318",
+  "filters": {
+    "mapNames": [
+      "2_pinch_point_le.map"
+    ],
+    "playerCountries": [
+      "Arabs"
+    ],
+    "playerNames": null,
+    "gameIds": null,
+    "sideIds": null,
+    "maxShards": null
+  },
+  "summary": {
+    "shardCount": 2,
+    "sampleCount": 104,
+    "maps": {
+      "2_pinch_point_le.map": 2
+    },
+    "players": {
+      "Dynamic": 1,
+      "mecharse": 1
+    },
+    "playerCountries": {
+      "Arabs": 2
+    },
+    "playerSides": {
+      "1": 2
+    }
+  },
+  "shardStems": [
+    "00758dde-b725-4442-ae8f-a657069251a0__mecharse",
+    "00d0f6be-26b5-4d8a-b76e-890b05e364d8__Dynamic"
+  ],
+  "shards": [
+    {
+      "stem": "00758dde-b725-4442-ae8f-a657069251a0__mecharse",
+      "gameId": "00758dde-b725-4442-ae8f-a657069251a0",
+      "mapName": "2_pinch_point_le.map",
+      "playerName": "mecharse",
+      "playerCountryName": "Arabs",
+      "playerSideId": 1,
+      "sampleCount": 60,
+      "metaPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\feature_layout_v1_validation_5replays_fix_20260318\\00758dde-b725-4442-ae8f-a657069251a0__mecharse.meta.json"
+    },
+    {
+      "stem": "00d0f6be-26b5-4d8a-b76e-890b05e364d8__Dynamic",
+      "gameId": "00d0f6be-26b5-4d8a-b76e-890b05e364d8",
+      "mapName": "2_pinch_point_le.map",
+      "playerName": "Dynamic",
+      "playerCountryName": "Arabs",
+      "playerSideId": 1,
+      "sampleCount": 44,
+      "metaPath": "D:\\workspace\\supalosa-chronodivide-bot\\packages\\chronodivide-bot-sl\\generated_tensors\\feature_layout_v1_validation_5replays_fix_20260318\\00d0f6be-26b5-4d8a-b76e-890b05e364d8__Dynamic.meta.json"
+    }
+  ]
+}

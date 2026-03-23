@@ -7,10 +7,12 @@ node_modules/
 replays/
 packages/chronodivide-bot-driver/debug/
 packages/chronodivide-bot-launcher/
-packages/chronodivide-bot-sl/generated_tensors
 packages/chronodivide-bot-sl/ladder_replays_top50
 packages/chronodivide-bot-sl/__pycache__
 packages/chronodivide-bot-sl/transform_lib/__pycache__
+packages/chronodivide-bot-sl/model_lib/__pycache__
+packages/chronodivide-bot-sl/model_runs
+packages/chronodivide-bot-sl/generated_tensors/*
 *.tgz
 *.rpl
 *.log
@@ -18,6 +20,7 @@ packages/chronodivide-bot-sl/transform_lib/__pycache__
 .env
 *.mpr
 *.tsbuildinfo
+*.pt
 
 # extracted game files
 *.ini
@@ -28,3 +31,6 @@ packages/chronodivide-bot-sl/transform_lib/__pycache__
 # maps - only allow maps directly in the test data 
 *.map
 !packages/chronodivide-bot-driver/data/*.map
+packages/chronodivide-bot-sl/generated_tensors
+packages/chronodivide-bot-sl/transform_lib/__init__.py
+
